@@ -28,16 +28,16 @@ Before running, ensure `.env` exists and required variables are present. The sam
 ./scripts/application-security.sh
 ```
 
-Then run as root:
+Then run via the installer (as root):
 ```bash
-./scripts/install-freeswitch.sh
+./install.sh
 ```
 
 ## Required environment variables
 The installer reads from `.env` (if present) and also allows overrides via env vars:
 - `FREESWITCH_REPO_TOKEN` (required) Token for SignalWire repo access.
 - `FREESWITCH_TENANT` or `PABX_TENANT` (optional, default: `default`).
-- `FREESWITCH_API_BASE` (optional, default: `https://dev1.manaos.cloud`).
+- `FREESWITCH_API_BASE` (optional, default: `https://dev1.publichost.cloud`).
 
 ## Optional DB (ODBC) configuration
 If these are provided, the installer writes `/etc/odbc.ini`:
