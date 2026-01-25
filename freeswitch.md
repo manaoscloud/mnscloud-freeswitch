@@ -23,11 +23,6 @@ XML Curl uses this endpoint:
 `/api/v1/pabx/{tenant}` with query parameters for FreeSWITCH sections.
 
 ## Install
-Before running, ensure `.env` exists and required variables are present. The same security step used by the app can be run to generate/validate `.env` and secrets:
-```bash
-./scripts/application-security.sh
-```
-
 Then run via the installer (as root):
 ```bash
 ./install.sh
