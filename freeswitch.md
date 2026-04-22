@@ -20,7 +20,7 @@ The installer lives at `scripts/install-freeswitch.sh` and performs:
 7) `systemctl enable --now freeswitch`.
 
 XML Curl uses this endpoint:
-`/api/v1/pabx/{tenant}` with query parameters for FreeSWITCH sections.
+`/api/v1/pabx/freeswitch/{tenant}` with query parameters for FreeSWITCH sections.
 
 ## Install
 Then run via the installer (as root):
@@ -50,4 +50,4 @@ If these are provided, the installer writes `/etc/odbc.ini`:
 ## Troubleshooting
 - If packages are missing, set `FREESWITCH_REPO_SUITE=bookworm` and rerun.
 - Ensure the SignalWire token is valid and has repo access.
-- Confirm the API is reachable at `${FREESWITCH_API_BASE}/api/v1/pabx/{tenant}`.
+- Confirm the API is reachable at `${FREESWITCH_API_BASE}/api/v1/pabx/freeswitch/{tenant}`.
