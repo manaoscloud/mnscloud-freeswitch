@@ -18,6 +18,8 @@ The installer lives at `scripts/install-freeswitch.sh` and performs:
 1. OS check (Debian 12).
 2. Repo setup using SignalWire `fsget` (requires token).
 3. Package install (`freeswitch-meta-all`, `unixodbc`, `odbc-mariadb`).
+   The installer also installs troubleshooting tools: `sngrep`, `tcpdump`, `ngrep`, `dnsutils`,
+   `traceroute`, `mtr-tiny`, `netcat-openbsd`, and `jq`.
 4. Module enablement in `/etc/freeswitch/autoload_configs/modules.conf.xml`.
 5. XML Curl config generation at `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`.
 6. Clean SIP profile generation at `/etc/freeswitch/sip_profiles/internal.xml`.
@@ -31,10 +33,10 @@ Before replacing any managed FreeSWITCH file or directory, the installer creates
 XML Curl uses this endpoint:
 `/api/v1/pabx/freeswitch` with FreeSWITCH native POST form payload.
 
-The installer creates a persistent node UUID in `/etc/mnscloud/pabx/node.uuid` and sends it in
-`X-PABX-Node-UUID`. The node UUID identifies the physical FreeSWITCH installation. The API resolves
-that value to `VoipPabxServer.VpsUUID` internally, so FreeSWITCH does not need to know the database
-record UUID.
+The installer creates a persistent node UUID in `/etc/mnscloud/pabx/node.uuid` and sends it as
+`node_uuid` in the XML Curl URL. The API also accepts `X-PABX-Node-UUID` for manual integrations.
+The node UUID identifies the physical FreeSWITCH installation. The API resolves that value to
+`VoipPabxServer.VpsUUID` internally, so FreeSWITCH does not need to know the database record UUID.
 
 The installer tries to bind the local node UUID to `VoipPabxServer.VpsNodeUUID` using the local
 hostname, FQDN, and public/private IPs already registered in the database. Discovery requires
