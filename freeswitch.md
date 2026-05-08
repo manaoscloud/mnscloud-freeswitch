@@ -61,8 +61,10 @@ present in `modules.conf.xml`, disables `mod_g729`, removes `freeswitch-mod-g729
 installer attempts, and enables `mod_bcg729` only when the module exists.
 
 If the configured repositories do not provide a ready `freeswitch-mod-bcg729` package, the
-installer tries to build `mod_bcg729.so` from the pinned open-source source repository configured
-by `FREESWITCH_BCG729_SOURCE_URL` and `FREESWITCH_BCG729_SOURCE_REF`. The default source is
+installer tries to build `mod_bcg729.so` from the local source in
+`freeswitch/codecs/mod_bcg729`. The local source keeps reinstalls from depending on online
+downloads. If the local directory is missing, the fallback source is configured by
+`FREESWITCH_BCG729_SOURCE_URL` and `FREESWITCH_BCG729_SOURCE_REF`; the default is
 `https://github.com/xadhoom/mod_bcg729.git` pinned at commit
 `4203247dee4719545005ec7ab9ea536fc83df1d8`. The build uses the system `libbcg729` library and
 FreeSWITCH headers. It does not install or enable the paid/ambiguous SignalWire G.729 module.
