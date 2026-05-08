@@ -17,8 +17,11 @@ The installer lives at `scripts/install-freeswitch.sh` and performs:
 
 1. OS check (Debian 12).
 2. Repo setup using SignalWire `fsget` (requires token).
-3. Package install (`freeswitch-meta-all`, `unixodbc`, `odbc-mariadb`, `libbcg729-0`,
-   `libbcg729-dev`).
+3. Package install with explicit FreeSWITCH runtime modules, avoiding `freeswitch-meta-all`
+   because that meta package pulls voicemail/mail transport dependencies such as `ssmtp`.
+   The base package set includes `freeswitch`, `freeswitch-systemd`, `freeswitch-conf-vanilla`,
+   SIP/XML Curl/runtime modules, `unixodbc`, `odbc-mariadb`, `libbcg729-0`, and
+   `libbcg729-dev`.
    The installer also installs troubleshooting tools: `sngrep`, `tcpdump`, `ngrep`, `dnsutils`,
    `traceroute`, `mtr-tiny`, `netcat-openbsd`, and `jq`.
 4. Module enablement in `/etc/freeswitch/autoload_configs/modules.conf.xml`.
@@ -54,8 +57,9 @@ OPUS,PCMU,PCMA,G729,G722,H264
 
 G.729 is standardized on the free `bcg729` library from the Debian repositories. The installer
 installs `libbcg729-0` and `libbcg729-dev`, disables the commercial `mod_com_g729` if it is
-present in `modules.conf.xml`, and enables `mod_bcg729` only when the module exists in the
-configured repositories/system. It does not install or enable the paid SignalWire G.729 module.
+present in `modules.conf.xml`, disables `mod_g729`, removes `freeswitch-mod-g729` from previous
+installer attempts, and enables `mod_bcg729` only when the module exists in the configured
+repositories/system. It does not install or enable the paid/ambiguous SignalWire G.729 module.
 
 H.264 is enabled as a video codec/pass-through capability. The Provider `Default Audio Codecs`
 and `Default Video Codecs` selections are the source of truth for generated directory/gateway
