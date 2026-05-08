@@ -17,7 +17,8 @@ The installer lives at `scripts/install-freeswitch.sh` and performs:
 
 1. OS check (Debian 12).
 2. Repo setup using SignalWire `fsget` (requires token).
-3. Package install (`freeswitch-meta-all`, `unixodbc`, `odbc-mariadb`).
+3. Package install (`freeswitch-meta-all`, `unixodbc`, `odbc-mariadb`, `libbcg729-0`,
+   `libbcg729-dev`).
    The installer also installs troubleshooting tools: `sngrep`, `tcpdump`, `ngrep`, `dnsutils`,
    `traceroute`, `mtr-tiny`, `netcat-openbsd`, and `jq`.
 4. Module enablement in `/etc/freeswitch/autoload_configs/modules.conf.xml`.
@@ -42,6 +43,23 @@ The installer tries to bind the local node UUID to `VoipPabxServer.VpsNodeUUID` 
 hostname, FQDN, and public/private IPs already registered in the database. Discovery requires
 database connectivity through the DB variables in `.env`. If multiple active server records match,
 copy the generated node UUID into the correct PABX server record manually.
+
+## Codecs
+
+The Manaos default media order is:
+
+```text
+OPUS,PCMU,PCMA,G729,G722,H264
+```
+
+G.729 is standardized on the free `bcg729` library from the Debian repositories. The installer
+installs `libbcg729-0` and `libbcg729-dev`, disables the commercial `mod_com_g729` if it is
+present in `modules.conf.xml`, and enables `mod_bcg729` only when the module exists in the
+configured repositories/system. It does not install or enable the paid SignalWire G.729 module.
+
+H.264 is enabled as a video codec/pass-through capability. The Provider `Default Audio Codecs`
+and `Default Video Codecs` selections are the source of truth for generated directory/gateway
+configuration; extension and trunk codec selections override Provider defaults only when filled.
 
 The generated `xml_curl.conf.xml` creates two explicit bindings:
 
@@ -109,6 +127,8 @@ If these are provided, the installer writes `/etc/odbc.ini`:
 - If node binding fails, confirm the registered PABX server has `VpsHostname`, `VpsPublicIP`, or
   `VpsPrivateIP` matching this host, or copy `/etc/mnscloud/pabx/node.uuid` into `VpsNodeUUID`.
 - Confirm the API is reachable at `${FREESWITCH_API_BASE}/api/v1/pabx/freeswitch`.
+- Confirm media support with `fs_cli -x "show codecs" | grep -Ei "G729|H264"` and
+  `fs_cli -x "module_exists mod_bcg729"`.
 - Confirm the module load log shows bindings such as `[directory]` and `[dialplan]`, not `[]`.
 - Keep SIP domains dynamic for multitenant PABX. Do not hard-code a single tenant domain in
   `sip_profiles/internal.xml`; use the domain/realm sent by the SIP client.
