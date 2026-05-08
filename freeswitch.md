@@ -20,7 +20,7 @@ The installer lives at `scripts/install-freeswitch.sh` and performs:
 3. Package install with explicit FreeSWITCH runtime modules, avoiding `freeswitch-meta-all`
    because that meta package pulls voicemail/mail transport dependencies such as `ssmtp`.
    The base package set includes `freeswitch`, `freeswitch-systemd`, `freeswitch-conf-vanilla`,
-   SIP/XML Curl/runtime modules, `unixodbc`, `odbc-mariadb`, `libbcg729-0`, and
+   SIP/XML Curl/runtime modules, build tools, `unixodbc`, `odbc-mariadb`, `libbcg729-0`, and
    `libbcg729-dev`.
    The installer also installs troubleshooting tools: `sngrep`, `tcpdump`, `ngrep`, `dnsutils`,
    `traceroute`, `mtr-tiny`, `netcat-openbsd`, and `jq`.
@@ -58,8 +58,14 @@ OPUS,PCMU,PCMA,G729,G722,H264
 G.729 is standardized on the free `bcg729` library from the Debian repositories. The installer
 installs `libbcg729-0` and `libbcg729-dev`, disables the commercial `mod_com_g729` if it is
 present in `modules.conf.xml`, disables `mod_g729`, removes `freeswitch-mod-g729` from previous
-installer attempts, and enables `mod_bcg729` only when the module exists in the configured
-repositories/system. It does not install or enable the paid/ambiguous SignalWire G.729 module.
+installer attempts, and enables `mod_bcg729` only when the module exists.
+
+If the configured repositories do not provide a ready `freeswitch-mod-bcg729` package, the
+installer tries to build `mod_bcg729.so` from the pinned open-source source repository configured
+by `FREESWITCH_BCG729_SOURCE_URL` and `FREESWITCH_BCG729_SOURCE_REF`. The default source is
+`https://github.com/xadhoom/mod_bcg729.git` pinned at commit
+`4203247dee4719545005ec7ab9ea536fc83df1d8`. The build uses the system `libbcg729` library and
+FreeSWITCH headers. It does not install or enable the paid/ambiguous SignalWire G.729 module.
 
 H.264 is enabled as a video codec/pass-through capability. The Provider `Default Audio Codecs`
 and `Default Video Codecs` selections are the source of truth for generated directory/gateway
