@@ -73,14 +73,15 @@ H.264 is enabled as a video codec/pass-through capability. The Provider `Default
 and `Default Video Codecs` selections are the source of truth for generated directory/gateway
 configuration; extension and trunk codec selections override Provider defaults only when filled.
 
-The generated `xml_curl.conf.xml` creates two explicit bindings:
+The generated `xml_curl.conf.xml` creates explicit bindings:
 
 - `directory`: extension authentication and directory lookup.
 - `dialplan`: inbound DID routing lookup.
+- `configuration`: currently used for `sofia.conf` gateway/trunk rendering.
 
-Do not bind XML Curl to every section. The `gateway-url` parameter must include the FreeSWITCH
-`bindings` attribute, otherwise `mod_xml_curl` can intercept `configuration` requests such as
-`sofia.conf`, `loopback.conf`, and `timezones.conf`, which can prevent SIP profiles from loading.
+Do not bind XML Curl without a `bindings` attribute. The API only renders the configuration keys it
+owns, such as `sofia.conf`; unrelated configuration requests receive `not found` XML so vanilla
+FreeSWITCH files can continue loading normally.
 
 ## Install
 
