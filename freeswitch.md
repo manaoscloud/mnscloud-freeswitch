@@ -20,8 +20,8 @@ The installer lives at `scripts/install-freeswitch.sh` and performs:
 3. Package install with explicit FreeSWITCH runtime modules, avoiding `freeswitch-meta-all`
    because that meta package pulls voicemail/mail transport dependencies such as `ssmtp`.
    The base package set includes `freeswitch`, `freeswitch-systemd`, `freeswitch-conf-vanilla`,
-   SIP/XML Curl/runtime modules, build tools, `unixodbc`, `odbc-mariadb`, `libbcg729-0`, and
-   `libbcg729-dev`.
+   SIP/XML Curl/XML dialplan/audio file runtime modules, build tools, `unixodbc`,
+   `odbc-mariadb`, `libbcg729-0`, and `libbcg729-dev`.
    The installer also installs troubleshooting tools: `sngrep`, `tcpdump`, `ngrep`, `dnsutils`,
    `traceroute`, `mtr-tiny`, `netcat-openbsd`, and `jq`.
 4. Module enablement in `/etc/freeswitch/autoload_configs/modules.conf.xml`.
@@ -42,10 +42,15 @@ The installer creates a persistent node UUID in `/etc/mnscloud/pabx/node.uuid` a
 The node UUID identifies the physical FreeSWITCH installation. The API resolves that value to
 `VoipPabxServer.VpsUUID` internally, so FreeSWITCH does not need to know the database record UUID.
 
-The installer tries to bind the local node UUID to `VoipPabxServer.VpsNodeUUID` using the local
-hostname, FQDN, and public/private IPs already registered in the database. Discovery requires
-database connectivity through the DB variables in `.env`. If multiple active server records match,
-copy the generated node UUID into the correct PABX server record manually.
+During an interactive install, the node UUID is generated near the start of the run. The installer
+prints it and waits so the operator can register that UUID on the FreeSWITCH `VoipPabxServer`
+record. It then validates the registration through the heartbeat API before continuing. If the
+registration cannot be validated, the installer continues and falls back to public IPv4 discovery
+for SIP/RTP advertisement, then `auto-nat`.
+
+The preferred flow is the API validation above. A legacy direct database auto-bind remains
+available only when database connection variables are explicitly available to the process or legacy
+deployment config; it is optional and is not required for SIP/RTP public IP selection.
 
 ## Codecs
 
@@ -77,11 +82,11 @@ The generated `xml_curl.conf.xml` creates explicit bindings:
 
 - `directory`: extension authentication and directory lookup.
 - `dialplan`: inbound DID routing lookup.
-- `configuration`: currently used for `sofia.conf` gateway/trunk rendering.
 
-Do not bind XML Curl without a `bindings` attribute. The API only renders the configuration keys it
-owns, such as `sofia.conf`; unrelated configuration requests receive `not found` XML so vanilla
-FreeSWITCH files can continue loading normally.
+Do not bind XML Curl without a `bindings` attribute. Keep `configuration` unbound by default:
+`sofia.conf.xml` is generated locally by the installer so Sofia can always load SIP profiles before
+any API-dependent directory or dialplan lookup. Dynamic trunk/gateway rendering should be added only
+after the API returns complete FreeSWITCH configuration XML for the requested file.
 
 ## Install
 
@@ -93,20 +98,29 @@ Then run via the installer (as root):
 
 ## Required environment variables
 
-The installer reads from `.env` (if present) and also allows overrides via env vars:
+The installer still accepts a small set of runtime variables. `.env` may be present for legacy
+deployments, but SIP/RTP public IP selection is intentionally not driven by `.env`:
 
 - `FREESWITCH_REPO_TOKEN` (required) Token for SignalWire repo access.
 - `FREESWITCH_API_TOKEN` or `PABX_API_TOKEN` (optional) Bearer token sent by XML Curl to the Manaos API.
 - `FREESWITCH_API_BASE` (optional, default: `https://dev1.publichost.cloud`).
 - `FREESWITCH_LOCAL_IP` (optional, default: `$${local_ip_v4}` in FreeSWITCH config).
-- `FREESWITCH_EXT_SIP_IP` (optional, default: `auto-nat`).
-- `FREESWITCH_EXT_RTP_IP` (optional, default: `auto-nat`).
+- `FREESWITCH_EXT_SIP_IP` (optional runtime-only override) Explicit public SIP IP.
+- `FREESWITCH_EXT_RTP_IP` (optional runtime-only override) Explicit public RTP IP.
+- `FREESWITCH_AUTO_DISCOVER_PUBLIC_IP` (optional runtime-only, default: `1`) Set to `0` to disable
+  automatic public IPv4 discovery and keep `auto-nat` unless explicit external IPs are provided.
+
+External SIP/RTP IPs are resolved in this order: explicit runtime env override, API-validated
+`VoipPabxServer.VpsPublicIP`, public IPv4 discovery over HTTPS, then `auto-nat`. The installer does
+not read `FREESWITCH_EXT_SIP_IP`, `FREESWITCH_EXT_RTP_IP`, or
+`FREESWITCH_AUTO_DISCOVER_PUBLIC_IP` from `.env`; keep those as per-run overrides only.
 
 ## Managed FreeSWITCH files
 
 The installer treats these paths as Manaos-managed and writes clean versions:
 
 - `/etc/freeswitch/autoload_configs/modules.conf.xml`
+- `/etc/freeswitch/autoload_configs/sofia.conf.xml`
 - `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`
 - `/etc/freeswitch/sip_profiles/internal.xml`
 - `/etc/freeswitch/directory`
