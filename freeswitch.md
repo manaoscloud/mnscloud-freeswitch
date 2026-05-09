@@ -48,6 +48,10 @@ record. It then validates the registration through the heartbeat API before cont
 registration cannot be validated, the installer continues and falls back to public IPv4 discovery
 for SIP/RTP advertisement, then `auto-nat`.
 
+The confirmation prompt reads and writes through `/dev/tty`, so it still works when the installer is
+started by a wrapper script that uses standard input internally. Only fully non-interactive sessions
+without a controlling terminal skip this wait.
+
 The preferred flow is the API validation above. A legacy direct database auto-bind remains
 available only when database connection variables are explicitly available to the process or legacy
 deployment config; it is optional and is not required for SIP/RTP public IP selection.
