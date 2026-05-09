@@ -43,18 +43,19 @@ The node UUID identifies the physical FreeSWITCH installation. The API resolves 
 `VoipPabxServer.VpsUUID` internally, so FreeSWITCH does not need to know the database record UUID.
 
 During an interactive install, the node UUID is generated near the start of the run. The installer
-prints it and waits so the operator can register that UUID on the FreeSWITCH `VoipPabxServer`
-record. It then validates the registration through the heartbeat API before continuing. If the
-registration cannot be validated, the installer continues and falls back to public IPv4 discovery
-for SIP/RTP advertisement, then `auto-nat`.
+first tries to bind the host through `POST /api/v1/pabx/freeswitch/bootstrap`. If the API cannot
+locate a compatible server, it prints the UUID and waits so the operator can register that UUID on
+the FreeSWITCH `VoipPabxServer` record. It then validates the registration through the heartbeat API
+before continuing. If the registration cannot be validated, the installer continues and falls back
+to public IPv4 discovery for SIP/RTP advertisement, then `auto-nat`.
 
 The confirmation prompt reads and writes through `/dev/tty`, so it still works when the installer is
 started by a wrapper script that uses standard input internally. Only fully non-interactive sessions
 without a controlling terminal skip this wait.
 
-The preferred flow is the API validation above. A legacy direct database auto-bind remains
-available only when database connection variables are explicitly available to the process or legacy
-deployment config; it is optional and is not required for SIP/RTP public IP selection.
+The preferred and supported flow is API bootstrap plus API heartbeat. The installer does not execute
+direct SQL to bind `VpsNodeUUID`; pass `FREESWITCH_API_TOKEN`, `PABX_API_TOKEN`, or
+`WORKER_PABX_TOKEN` when automatic bootstrap is required.
 
 ## Codecs
 
@@ -115,7 +116,7 @@ deployments, but SIP/RTP public IP selection is intentionally not driven by `.en
   automatic public IPv4 discovery and keep `auto-nat` unless explicit external IPs are provided.
 
 External SIP/RTP IPs are resolved in this order: explicit runtime env override, API-validated
-`VoipPabxServer.VpsPublicIP`, public IPv4 discovery over HTTPS, then `auto-nat`. The installer does
+`VoipPabxServer.VpsPublicIPv4`, public IPv4 discovery over HTTPS, then `auto-nat`. The installer does
 not read `FREESWITCH_EXT_SIP_IP`, `FREESWITCH_EXT_RTP_IP`, or
 `FREESWITCH_AUTO_DISCOVER_PUBLIC_IP` from `.env`; keep those as per-run overrides only.
 
@@ -155,8 +156,9 @@ If these are provided, the installer writes `/etc/odbc.ini`:
 
 - If packages are missing, set `FREESWITCH_REPO_SUITE=bookworm` and rerun.
 - Ensure the SignalWire token is valid and has repo access.
-- If node binding fails, confirm the registered PABX server has `VpsHostname`, `VpsPublicIP`, or
-  `VpsPrivateIP` matching this host, or copy `/etc/mnscloud/pabx/node.uuid` into `VpsNodeUUID`.
+- If node binding fails, confirm the registered PABX server has `VpsHostname`, `VpsPublicIPv4`,
+  `VpsPublicIPv6`, `VpsPrivateIPv4`, or `VpsPrivateIPv6` matching this host, or copy
+  `/etc/mnscloud/pabx/node.uuid` into `VpsNodeUUID`.
 - Confirm the API is reachable at `${FREESWITCH_API_BASE}/api/v1/pabx/freeswitch`.
 - Confirm media support with `fs_cli -x "show codecs" | grep -Ei "G729|H264"` and
   `fs_cli -x "module_exists mod_bcg729"`.
