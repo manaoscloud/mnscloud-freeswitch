@@ -87,11 +87,12 @@ The generated `xml_curl.conf.xml` creates explicit bindings:
 
 - `directory`: extension authentication and directory lookup.
 - `dialplan`: inbound DID routing lookup.
+- `configuration`: complete `sofia.conf` rendering, including managed profiles and gateways.
 
-Do not bind XML Curl without a `bindings` attribute. Keep `configuration` unbound by default:
-`sofia.conf.xml` is generated locally by the installer so Sofia can always load SIP profiles before
-any API-dependent directory or dialplan lookup. Dynamic trunk/gateway rendering should be added only
-after the API returns complete FreeSWITCH configuration XML for the requested file.
+Do not bind XML Curl without a `bindings` attribute. The `configuration` binding must only return
+complete FreeSWITCH configuration XML. For `sofia.conf`, the API must render the full Sofia config
+with profile settings and managed gateways; returning only dynamic gateways replaces the local
+profile with an incomplete profile and Sofia will fail with `No Settings, check the new config!`.
 
 ## Install
 
@@ -114,6 +115,9 @@ deployments, but SIP/RTP public IP selection is intentionally not driven by `.en
 - `FREESWITCH_EXT_RTP_IP` (optional runtime-only override) Explicit public RTP IP.
 - `FREESWITCH_AUTO_DISCOVER_PUBLIC_IP` (optional runtime-only, default: `1`) Set to `0` to disable
   automatic public IPv4 discovery and keep `auto-nat` unless explicit external IPs are provided.
+- `FREESWITCH_ESL_ALLOWED_IPS` (recommended) CIDR list allowed to access ESL, for example
+  `172.17.0.10/32`.
+- `FREESWITCH_ESL_PORT` (optional, default: `8021`).
 
 External SIP/RTP IPs are resolved in this order: explicit runtime env override, API-validated
 `VoipPabxServer.VpsPublicIPv4`, public IPv4 discovery over HTTPS, then `auto-nat`. The installer does
@@ -127,6 +131,8 @@ The installer treats these paths as mnscloud-managed and writes clean versions:
 - `/etc/freeswitch/autoload_configs/modules.conf.xml`
 - `/etc/freeswitch/autoload_configs/sofia.conf.xml`
 - `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`
+- `/etc/freeswitch/autoload_configs/event_socket.conf.xml`
+- `/etc/freeswitch/autoload_configs/acl.conf.xml`
 - `/etc/freeswitch/sip_profiles/internal.xml`
 - `/etc/freeswitch/directory`
 - `/etc/odbc.ini` when ODBC env vars are provided
@@ -148,6 +154,7 @@ If these are provided, the installer writes `/etc/odbc.ini`:
 ## Output files
 
 - XML Curl config: `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`
+- ESL secret: `/etc/mnscloud/pabx/freeswitch-esl.secret`
 - Node UUID: `/etc/mnscloud/pabx/node.uuid`
 - ODBC DSN: `/etc/odbc.ini`
 - Logs: `/var/log/freeswitch/xml_curl`
@@ -162,6 +169,9 @@ If these are provided, the installer writes `/etc/odbc.ini`:
 - Confirm the API is reachable at `${FREESWITCH_API_BASE}/api/v1/pabx/freeswitch`.
 - Confirm media support with `fs_cli -x "show codecs" | grep -Ei "G729|H264"` and
   `fs_cli -x "module_exists mod_bcg729"`.
-- Confirm the module load log shows bindings such as `[directory]` and `[dialplan]`, not `[]`.
+- Confirm the module load log shows bindings such as `[directory]`, `[dialplan]`, and
+  `[configuration]`, not `[]`.
+- Confirm ESL is listening only on the intended private IP/port and that `mnscloud-control` allows
+  only the worker/API server IP.
 - Keep SIP domains dynamic for multitenant PABX. Do not hard-code a single tenant domain in
   `sip_profiles/internal.xml`; use the domain/realm sent by the SIP client.
