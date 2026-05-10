@@ -59,7 +59,7 @@ direct SQL to bind `VpsNodeUUID`; pass `FREESWITCH_API_TOKEN`, `PABX_API_TOKEN`,
 
 ## Codecs
 
-The Manaos default media order is:
+The mnscloud default media order is:
 
 ```text
 OPUS,PCMU,PCMA,G729,G722,H264
@@ -107,7 +107,7 @@ The installer still accepts a small set of runtime variables. `.env` may be pres
 deployments, but SIP/RTP public IP selection is intentionally not driven by `.env`:
 
 - `FREESWITCH_REPO_TOKEN` (required) Token for SignalWire repo access.
-- `FREESWITCH_API_TOKEN` or `PABX_API_TOKEN` (optional) Bearer token sent by XML Curl to the Manaos API.
+- `FREESWITCH_API_TOKEN` or `PABX_API_TOKEN` (optional) Bearer token sent by XML Curl to the mnscloud API.
 - `FREESWITCH_API_BASE` (optional, default: `https://dev1.publichost.cloud`).
 - `FREESWITCH_LOCAL_IP` (optional, default: `$${local_ip_v4}` in FreeSWITCH config).
 - `FREESWITCH_EXT_SIP_IP` (optional runtime-only override) Explicit public SIP IP.
@@ -122,7 +122,7 @@ not read `FREESWITCH_EXT_SIP_IP`, `FREESWITCH_EXT_RTP_IP`, or
 
 ## Managed FreeSWITCH files
 
-The installer treats these paths as Manaos-managed and writes clean versions:
+The installer treats these paths as mnscloud-managed and writes clean versions:
 
 - `/etc/freeswitch/autoload_configs/modules.conf.xml`
 - `/etc/freeswitch/autoload_configs/sofia.conf.xml`
