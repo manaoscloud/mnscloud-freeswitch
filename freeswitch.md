@@ -118,6 +118,8 @@ deployments, but SIP/RTP public IP selection is intentionally not driven by `.en
 - `FREESWITCH_ESL_ALLOWED_IPS` (recommended) CIDR list allowed to access ESL, for example
   `172.17.0.10/32`.
 - `FREESWITCH_ESL_PORT` (optional, default: `8021`).
+- `FREESWITCH_ESL_LISTEN_IP` (optional, default: `0.0.0.0`). ESL access is still restricted by
+  the generated `mnscloud-control` ACL.
 
 External SIP/RTP IPs are resolved in this order: explicit runtime env override, API-validated
 `VoipPabxServer.VpsPublicIPv4`, public IPv4 discovery over HTTPS, then `auto-nat`. The installer does
@@ -133,6 +135,7 @@ The installer treats these paths as mnscloud-managed and writes clean versions:
 - `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`
 - `/etc/freeswitch/autoload_configs/event_socket.conf.xml`
 - `/etc/freeswitch/autoload_configs/acl.conf.xml`
+- `/etc/fs_cli.conf`
 - `/etc/freeswitch/sip_profiles/internal.xml`
 - `/etc/freeswitch/directory`
 - `/etc/odbc.ini` when ODBC env vars are provided
@@ -155,6 +158,7 @@ If these are provided, the installer writes `/etc/odbc.ini`:
 
 - XML Curl config: `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`
 - ESL secret: `/etc/mnscloud/pabx/freeswitch-esl.secret`
+- Local `fs_cli` config: `/etc/fs_cli.conf`
 - Node UUID: `/etc/mnscloud/pabx/node.uuid`
 - ODBC DSN: `/etc/odbc.ini`
 - Logs: `/var/log/freeswitch/xml_curl`
@@ -171,7 +175,7 @@ If these are provided, the installer writes `/etc/odbc.ini`:
   `fs_cli -x "module_exists mod_bcg729"`.
 - Confirm the module load log shows bindings such as `[directory]`, `[dialplan]`, and
   `[configuration]`, not `[]`.
-- Confirm ESL is listening only on the intended private IP/port and that `mnscloud-control` allows
-  only the worker/API server IP.
+- Confirm ESL is restricted by `mnscloud-control`; the installer always allows `127.0.0.1/32` for
+  local `fs_cli` and adds the API/worker source IPs for remote control.
 - Keep SIP domains dynamic for multitenant PABX. Do not hard-code a single tenant domain in
   `sip_profiles/internal.xml`; use the domain/realm sent by the SIP client.
