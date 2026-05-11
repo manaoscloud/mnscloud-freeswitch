@@ -20,11 +20,12 @@ The installer lives at `scripts/install-freeswitch.sh` and performs:
 3. Package install with explicit FreeSWITCH runtime modules, avoiding `freeswitch-meta-all`
    because that meta package pulls voicemail/mail transport dependencies such as `ssmtp`.
    The base package set includes `freeswitch`, `freeswitch-systemd`, `freeswitch-conf-vanilla`,
-   SIP/XML Curl/XML dialplan/audio file runtime modules, build tools, `unixodbc`,
+   SIP/XML Curl/XML dialplan/audio file/tones/local stream runtime modules, build tools, `unixodbc`,
    `odbc-mariadb`, `libbcg729-0`, and `libbcg729-dev`.
    The installer also installs troubleshooting tools: `sngrep`, `tcpdump`, `ngrep`, `dnsutils`,
    `traceroute`, `mtr-tiny`, `netcat-openbsd`, and `jq`.
-4. Module enablement in `/etc/freeswitch/autoload_configs/modules.conf.xml`.
+4. Managed module generation in `/etc/freeswitch/autoload_configs/modules.conf.xml`, loading only
+   modules whose `.so` files are present on the host.
 5. XML Curl config generation at `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`.
 6. Clean SIP profile generation at `/etc/freeswitch/sip_profiles/internal.xml`.
 7. Static demo directory cleanup under `/etc/freeswitch/directory`.
@@ -55,7 +56,9 @@ without a controlling terminal skip this wait.
 
 The preferred and supported flow is API bootstrap plus API heartbeat. The installer does not execute
 direct SQL to bind `VpsNodeUUID`; pass `FREESWITCH_API_TOKEN`, `PABX_API_TOKEN`, or
-`WORKER_PABX_TOKEN` when automatic bootstrap is required.
+`WORKER_PABX_TOKEN` when automatic bootstrap is required. The same token is also sent by XML Curl;
+if it is missing or still set to a `change-me...` value, FreeSWITCH will start but the API fetches
+will return HTTP 401.
 
 ## Codecs
 
@@ -108,7 +111,8 @@ The installer still accepts a small set of runtime variables. `.env` may be pres
 deployments, but SIP/RTP public IP selection is intentionally not driven by `.env`:
 
 - `FREESWITCH_REPO_TOKEN` (required) Token for SignalWire repo access.
-- `FREESWITCH_API_TOKEN` or `PABX_API_TOKEN` (optional) Bearer token sent by XML Curl to the mnscloud API.
+- `FREESWITCH_API_TOKEN` or `PABX_API_TOKEN` (recommended) Bearer token sent by XML Curl to the
+  mnscloud API. It must match the API-side PABX worker token.
 - `FREESWITCH_API_BASE` (optional, default: `https://dev1.publichost.cloud`).
 - `FREESWITCH_LOCAL_IP` (optional, default: `$${local_ip_v4}` in FreeSWITCH config).
 - `FREESWITCH_EXT_SIP_IP` (optional runtime-only override) Explicit public SIP IP.
@@ -171,6 +175,10 @@ If these are provided, the installer writes `/etc/odbc.ini`:
   `VpsPublicIPv6`, `VpsPrivateIPv4`, or `VpsPrivateIPv6` matching this host, or copy
   `/etc/mnscloud/pabx/node.uuid` into `VpsNodeUUID`.
 - Confirm the API is reachable at `${FREESWITCH_API_BASE}/api/v1/pabx/freeswitch`.
+- HTTP 401 from `mod_xml_curl` means the Bearer token in
+  `/etc/freeswitch/autoload_configs/xml_curl.conf.xml` does not match the API-side PABX token.
+- If plain `fs_cli` cannot connect, verify `/etc/fs_cli.conf` has a `[default]` section and the
+  password matches `/etc/mnscloud/pabx/freeswitch-esl.secret`.
 - Confirm media support with `fs_cli -x "show codecs" | grep -Ei "G729|H264"` and
   `fs_cli -x "module_exists mod_bcg729"`.
 - Confirm the module load log shows bindings such as `[directory]`, `[dialplan]`, and
