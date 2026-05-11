@@ -178,8 +178,9 @@ If these are provided, the installer writes `/etc/odbc.ini`:
   `VpsPublicIPv6`, `VpsPrivateIPv4`, or `VpsPrivateIPv6` matching this host, or copy
   `/etc/mnscloud/pabx/node.uuid` into `VpsNodeUUID`.
 - Confirm the API is reachable at `$(cat /etc/mnscloud/pabx/api.base)/api/v1/pabx/freeswitch`.
-- HTTP 401 from `mod_xml_curl` means the Bearer token in
-  `/etc/freeswitch/autoload_configs/xml_curl.conf.xml` does not match the API-side PABX token.
+- HTTP 401 from `mod_xml_curl` means the Basic Auth password generated from
+  `/etc/mnscloud/pabx/api.token` does not match the API-side PABX token, or FreeSWITCH has not
+  reloaded `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`.
 - If plain `fs_cli` cannot connect, verify `/etc/fs_cli.conf` has a `[default]` section and the
   password matches `/etc/mnscloud/pabx/freeswitch-esl.secret`.
 - Confirm media support with `fs_cli -x "show codecs" | grep -Ei "G729|H264"` and
