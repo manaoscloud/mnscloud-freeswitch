@@ -104,23 +104,26 @@ Then run via the installer (as root):
 ./install.sh
 ```
 
-## Required environment variables
+## Local installer state
 
-The installer still accepts a small set of runtime variables. `.env` may be present for legacy
-deployments, but SIP/RTP public IP selection is intentionally not driven by `.env`:
+Na primeira execução, o instalador solicita a URL base da API e salva em
+`/etc/mnscloud/pabx/api.base`. O token/PAT do repo SignalWire também é solicitado e salvo em
+`/etc/mnscloud/pabx/signalwire-repo.token`, com permissão restrita. Essas informações não ficam no
+`.env`.
 
-- `FREESWITCH_REPO_TOKEN` (required) Token for SignalWire repo access.
-- `FREESWITCH_API_BASE` (optional, default: `https://dev1.publichost.cloud`).
+O instalador ainda aceita variáveis runtime pontuais para seleção SIP/RTP local, mas não lê esses
+valores do `.env`:
+
 - `FREESWITCH_LOCAL_IP` (optional, default: `$${local_ip_v4}` in FreeSWITCH config).
 - `FREESWITCH_EXT_SIP_IP` (optional runtime-only override) Explicit public SIP IP.
 - `FREESWITCH_EXT_RTP_IP` (optional runtime-only override) Explicit public RTP IP.
 - `FREESWITCH_AUTO_DISCOVER_PUBLIC_IP` (optional runtime-only, default: `1`) Set to `0` to disable
   automatic public IPv4 discovery and keep `auto-nat` unless explicit external IPs are provided.
-- `FREESWITCH_ESL_ALLOWED_IPS` (recommended) CIDR list allowed to access ESL, for example
-  `172.17.0.10/32`.
-- `FREESWITCH_ESL_PORT` (optional, default: `8021`).
-- `FREESWITCH_ESL_LISTEN_IP` (optional, default: `0.0.0.0`). ESL access is still restricted by
-  the generated `mnscloud-control` ACL.
+
+O control plane ESL é configurado pelo instalador com porta `8021`, listen em `0.0.0.0`,
+ACL `mnscloud-control` descoberta automaticamente e senha forte local em
+`/etc/mnscloud/pabx/freeswitch-esl.secret`. Esses dados são enviados no heartbeat/bootstrap e
+persistidos no cadastro `VoipPabxServer`, sem depender de overrides no `.env`.
 
 External SIP/RTP IPs are resolved in this order: explicit runtime env override, API-validated
 `VoipPabxServer.VpsPublicIPv4`, public IPv4 discovery over HTTPS, then `auto-nat`. The installer does
@@ -171,7 +174,7 @@ If these are provided, the installer writes `/etc/odbc.ini`:
 - If node binding fails, confirm the registered PABX server has `VpsHostname`, `VpsPublicIPv4`,
   `VpsPublicIPv6`, `VpsPrivateIPv4`, or `VpsPrivateIPv6` matching this host, or copy
   `/etc/mnscloud/pabx/node.uuid` into `VpsNodeUUID`.
-- Confirm the API is reachable at `${FREESWITCH_API_BASE}/api/v1/pabx/freeswitch`.
+- Confirm the API is reachable at `$(cat /etc/mnscloud/pabx/api.base)/api/v1/pabx/freeswitch`.
 - HTTP 401 from `mod_xml_curl` means the Bearer token in
   `/etc/freeswitch/autoload_configs/xml_curl.conf.xml` does not match the API-side PABX token.
 - If plain `fs_cli` cannot connect, verify `/etc/fs_cli.conf` has a `[default]` section and the
