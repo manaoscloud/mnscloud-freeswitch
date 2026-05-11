@@ -55,10 +55,9 @@ started by a wrapper script that uses standard input internally. Only fully non-
 without a controlling terminal skip this wait.
 
 The preferred and supported flow is API bootstrap plus API heartbeat. The installer does not execute
-direct SQL to bind `VpsNodeUUID`; pass `FREESWITCH_API_TOKEN`, `PABX_API_TOKEN`, or
-`WORKER_PABX_TOKEN` when automatic bootstrap is required. The same token is also sent by XML Curl;
-if it is missing or still set to a `change-me...` value, FreeSWITCH will start but the API fetches
-will return HTTP 401.
+direct SQL to bind `VpsNodeUUID`; it generates a per-server API token in
+`/etc/mnscloud/pabx/api.token`, sends it during bootstrap, and the API stores only its hash in
+`VoipPabxServer.VpsApiTokenHash`. The same token is sent by XML Curl on every protected fetch.
 
 ## Codecs
 
@@ -111,8 +110,6 @@ The installer still accepts a small set of runtime variables. `.env` may be pres
 deployments, but SIP/RTP public IP selection is intentionally not driven by `.env`:
 
 - `FREESWITCH_REPO_TOKEN` (required) Token for SignalWire repo access.
-- `FREESWITCH_API_TOKEN` or `PABX_API_TOKEN` (recommended) Bearer token sent by XML Curl to the
-  mnscloud API. It must match the API-side PABX worker token.
 - `FREESWITCH_API_BASE` (optional, default: `https://dev1.publichost.cloud`).
 - `FREESWITCH_LOCAL_IP` (optional, default: `$${local_ip_v4}` in FreeSWITCH config).
 - `FREESWITCH_EXT_SIP_IP` (optional runtime-only override) Explicit public SIP IP.
