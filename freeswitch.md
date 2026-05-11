@@ -44,20 +44,22 @@ The node UUID identifies the physical FreeSWITCH installation. The API resolves 
 `VoipPabxServer.VpsUUID` internally, so FreeSWITCH does not need to know the database record UUID.
 
 During an interactive install, the node UUID is generated near the start of the run. The installer
-first tries to bind the host through `POST /api/v1/pabx/freeswitch/bootstrap`. If the API cannot
-locate a compatible server, it prints the UUID and waits so the operator can register that UUID on
-the FreeSWITCH `VoipPabxServer` record. It then validates the registration through the heartbeat API
-before continuing. If the registration cannot be validated, the installer continues and falls back
-to public IPv4 discovery for SIP/RTP advertisement, then `auto-nat`.
+prints the UUID and waits so the operator can register that exact UUID on the correct FreeSWITCH
+`VoipPabxServer` record. The operator must type `validate`; an empty ENTER does not confirm the
+registration. The installer then validates the registration through the heartbeat API before
+continuing. If the registration cannot be validated and the operator explicitly types `skip`, the
+installer continues and falls back to public IPv4 discovery for SIP/RTP advertisement, then
+`auto-nat`.
 
 The confirmation prompt reads and writes through `/dev/tty`, so it still works when the installer is
 started by a wrapper script that uses standard input internally. Only fully non-interactive sessions
 without a controlling terminal skip this wait.
 
-The preferred and supported flow is API bootstrap plus API heartbeat. The installer does not execute
-direct SQL to bind `VpsNodeUUID`; it generates a per-server API token in
-`/etc/mnscloud/pabx/api.token`, sends it during bootstrap, and the API stores only its hash in
-`VoipPabxServer.VpsApiTokenHash`. The same token is sent by XML Curl on every protected fetch.
+The preferred and supported flow is manual Node UUID registration plus API heartbeat validation. The
+installer does not execute direct SQL to bind `VpsNodeUUID`; it generates a per-server API token in
+`/etc/mnscloud/pabx/api.token`, sends it during heartbeat validation, and the API stores only its
+hash in `VoipPabxServer.VpsApiTokenHash`. The same token is sent by XML Curl on every protected
+fetch.
 
 ## Codecs
 
@@ -107,7 +109,8 @@ Then run via the installer (as root):
 ## Local installer state
 
 Na primeira execução, o instalador solicita a URL base da API e salva em
-`/etc/mnscloud/pabx/api.base`. O token/PAT do repo SignalWire também é solicitado e salvo em
+`/etc/mnscloud/pabx/api.base`. O token/PAT do repo SignalWire é solicitado com entrada visível,
+para que o operador consiga conferir o que digitou ou colou, e salvo em
 `/etc/mnscloud/pabx/signalwire-repo.token`, com permissão restrita. Essas informações não ficam no
 `.env`.
 
@@ -122,8 +125,8 @@ valores do `.env`:
 
 O control plane ESL é configurado pelo instalador com porta `8021`, listen em `0.0.0.0`,
 ACL `mnscloud-control` descoberta automaticamente e senha forte local em
-`/etc/mnscloud/pabx/freeswitch-esl.secret`. Esses dados são enviados no heartbeat/bootstrap e
-persistidos no cadastro `VoipPabxServer`, sem depender de overrides no `.env`.
+`/etc/mnscloud/pabx/freeswitch-esl.secret`. Esses dados são enviados no heartbeat e persistidos no
+cadastro `VoipPabxServer`, sem depender de overrides no `.env`.
 
 External SIP/RTP IPs are resolved in this order: explicit runtime env override, API-validated
 `VoipPabxServer.VpsPublicIPv4`, public IPv4 discovery over HTTPS, then `auto-nat`. The installer does
