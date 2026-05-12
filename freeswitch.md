@@ -98,6 +98,28 @@ complete FreeSWITCH configuration XML. For `sofia.conf`, the API must render the
 with profile settings and managed gateways; returning only dynamic gateways replaces the local
 profile with an incomplete profile and Sofia will fail with `No Settings, check the new config!`.
 
+## Inbound Routing
+
+FreeSWITCH inbound routing is rendered by the API through the XML Curl `dialplan` binding. The
+handler resolves the tenant from the requested SIP domain and then resolves the destination by exact
+DID or by `VoipPabxInboundRoute.VriPattern`.
+
+The minimal supported route types are:
+
+- `extension`: bridges to the registered user with `sofia_contact(user@domain)`.
+- `external`: bridges through the first enabled outbound/both FreeSWITCH gateway on the same PABX
+  when the target is an external destination record, or through the first tenant gateway when the
+  route stores a free number.
+- `group`: bridges to enabled group members in priority order.
+- `queue`: bridges to enabled queue members in priority order. This is intentionally a simple
+  receive-and-send queue behavior; advanced `mod_callcenter` behavior is a separate layer.
+- `ivr`: answers, plays the configured prompt if present, collects one digit with
+  `play_and_get_digits`, and executes the matching IVR option to extension, external, group, queue
+  or another IVR.
+
+This keeps route changes API/database driven. FreeSWITCH only needs XML Curl active and does not need
+static per-route dialplan files.
+
 ## Install
 
 Then run via the installer (as root):
