@@ -173,6 +173,13 @@ The generated internal SIP profile is domain-neutral for multitenant PABX. It in
 not set `force-register-domain`, `force-subscription-domain`, or `force-register-db-domain`.
 SIP clients must register using the tenant PABX domain as realm/domain.
 
+The internal profile is NAT-aware for remote softphones. It keeps `sip-ip`/`rtp-ip` on the local
+interface and advertises `ext-sip-ip`/`ext-rtp-ip` from the explicit/API/discovered public IP. The
+profile also enables `local-network-acl=localnet.auto`, `apply-nat-acl=nat.auto`,
+`aggressive-nat-detection`, `NDLB-force-rport`, `NDLB-connectile-dysfunction`,
+`NDLB-received-in-nat-reg-contact`, and `rewrite-contact` so remote registrations behind carrier NAT
+keep the received IP/port instead of trusting private Contact data.
+
 ## Optional DB (ODBC) configuration
 
 If these are provided, the installer writes `/etc/odbc.ini`:
