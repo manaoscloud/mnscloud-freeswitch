@@ -381,6 +381,19 @@ cleanup_broken_freeswitch_meta_packages() {
   fi
 }
 
+apt_install_optional() {
+  local package="$1" description="${2:-$1}"
+  if ! apt-cache show "${package}" >/dev/null 2>&1; then
+    warn "Optional package ${package} not found. Skipping ${description}."
+    return 1
+  fi
+  if run "apt-get install -y --no-install-recommends '${package}'"; then
+    return 0
+  fi
+  warn "Optional package ${package} could not be installed. Skipping ${description}; the installer will continue."
+  return 1
+}
+
 install_pkgs() {
   local os
   os="$(detect_freeswitch_os)"
@@ -405,16 +418,14 @@ install_pkgs() {
         build-essential git cmake pkg-config \
         unixodbc odbc-mariadb libbcg729-0 libbcg729-dev \
         sngrep tcpdump ngrep dnsutils traceroute mtr-tiny netcat-openbsd jq"
-      if apt-cache show libfreeswitch-dev >/dev/null 2>&1; then
-        run "apt-get install -y --no-install-recommends libfreeswitch-dev"
-      elif apt-cache show freeswitch-dev >/dev/null 2>&1; then
-        run "apt-get install -y --no-install-recommends freeswitch-dev"
+      if apt_install_optional "libfreeswitch-dev" "FreeSWITCH headers for optional mod_bcg729 build"; then
+        :
+      elif apt_install_optional "freeswitch-dev" "FreeSWITCH headers for optional mod_bcg729 build"; then
+        :
       else
         warn "FreeSWITCH headers package not found (libfreeswitch-dev/freeswitch-dev). mod_bcg729 compilation may fail without /usr/include/freeswitch/switch.h."
       fi
-      if apt-cache show freeswitch-mod-bcg729 >/dev/null 2>&1; then
-        run "apt-get install -y --no-install-recommends freeswitch-mod-bcg729"
-      else
+      if ! apt_install_optional "freeswitch-mod-bcg729" "prebuilt FreeSWITCH bcg729 module"; then
         warn "Package freeswitch-mod-bcg729 was not found in the configured repositories. Official libbcg729 was installed; mod_bcg729 will be enabled only if the module exists on the system."
       fi
       ;;
