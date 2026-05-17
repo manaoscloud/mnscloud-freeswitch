@@ -234,7 +234,7 @@ install_project_deps() {
     debian)
       pkg_update
       # Current baseline: you can add more items here in the future
-      run "apt-get install -y --no-install-recommends wget git curl make man-db manpages htop bash-completion nano screen ripgrep"
+      run "apt-get install -y --no-install-recommends wget git curl make man-db manpages htop bash-completion nano screen ripgrep poppler-utils"
       ;;
     rocky)
       pkg_update
@@ -242,7 +242,7 @@ install_project_deps() {
       run "dnf -y install epel-release"
       run "dnf -y makecache"
       # Current baseline: you can add more items here in the future
-      run "dnf -y install wget git curl make man-db htop bash-completion nano screen ripgrep || true"
+      run "dnf -y install wget git curl make man-db htop bash-completion nano screen ripgrep poppler-utils || true"
       run "dnf -y install man-pages || true"
       ;;
     *)
