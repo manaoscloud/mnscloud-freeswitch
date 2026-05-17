@@ -1,0 +1,13 @@
+# MNSCloud code ownership policy.
+# Create the GitHub team below in the manaoscloud organization and enable branch protection
+# with required CODEOWNERS review for main.
+
+* @manaoscloud/core-maintainers
+
+# Suggested future split, once teams exist:
+# /app/ @manaoscloud/frontend-maintainers
+# /api/ @manaoscloud/api-maintainers
+# /mariadb/ @manaoscloud/database-maintainers
+# /workers/ @manaoscloud/workers-maintainers
+# /scripts/ @manaoscloud/devops-maintainers
+# /docs/ @manaoscloud/docs-maintainers
