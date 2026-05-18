@@ -17,6 +17,7 @@ monorepo at runtime.
 - Do not add hidden API bypasses, static master tokens, default production credentials, or privileged
   shortcuts.
 - Use placeholders in examples: `<api_base>`, `<node_uuid>`, `<token>`, `<tenant_domain>`.
+- Node UUIDs generated, persisted, displayed, or sent by installers must be normalized to lowercase.
 - Local secrets must be generated on the target host and stored with restrictive permissions.
 - Permanent provider credentials stay in the API/control plane.
 

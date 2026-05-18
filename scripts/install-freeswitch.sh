@@ -196,11 +196,11 @@ detect_freeswitch_os() {
 
 generate_uuid() {
   if [[ -r /proc/sys/kernel/random/uuid ]]; then
-    tr '[:lower:]' '[:upper:]' < /proc/sys/kernel/random/uuid
+    tr '[:upper:]' '[:lower:]' < /proc/sys/kernel/random/uuid
     return 0
   fi
   if command -v uuidgen >/dev/null 2>&1; then
-    uuidgen | tr '[:lower:]' '[:upper:]'
+    uuidgen | tr '[:upper:]' '[:lower:]'
     return 0
   fi
   err "Could not generate a local UUID. Install uuid-runtime or use a kernel with /proc/sys/kernel/random/uuid."
@@ -271,7 +271,7 @@ ensure_node_uuid_file() {
     err "Invalid Node UUID at ${NODE_UUID_FILE}: ${NODE_UUID}"
     return 1
   fi
-  compact_node_uuid="$(echo "${compact_node_uuid}" | tr '[:lower:]' '[:upper:]')"
+  compact_node_uuid="$(echo "${compact_node_uuid}" | tr '[:upper:]' '[:lower:]')"
   NODE_UUID="${compact_node_uuid:0:8}-${compact_node_uuid:8:4}-${compact_node_uuid:12:4}-${compact_node_uuid:16:4}-${compact_node_uuid:20:12}"
   write_file "${NODE_UUID_FILE}" "${NODE_UUID}"
 
