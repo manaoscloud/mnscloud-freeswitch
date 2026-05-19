@@ -106,19 +106,42 @@ DID or by `VoipPabxInboundRoute.VriPattern`.
 
 The minimal supported route types are:
 
-- `extension`: bridges to the registered user with `sofia_contact(user@domain)`.
+- `extension`: bridges to the registered user with `sofia_contact(user@domain)`. The XML Curl
+  renderer sets `continue_on_fail=true`, a bounded `call_timeout`, and an explicit post-bridge
+  hangup cause. If the extension has no active registration and no configured fallback destination,
+  the call must end deterministically with `USER_NOT_REGISTERED` instead of ringing indefinitely.
 - `external`: bridges through the first enabled outbound/both FreeSWITCH gateway on the same PABX
   when the target is an external destination record, or through the first tenant gateway when the
   route stores a free number.
 - `group`: bridges to enabled group members in priority order.
 - `queue`: bridges to enabled queue members in priority order. This is intentionally a simple
   receive-and-send queue behavior; advanced `mod_callcenter` behavior is a separate layer.
-- `ivr`: answers, plays the configured prompt if present, collects one digit with
-  `play_and_get_digits`, and executes the matching IVR option to extension, external, group, queue
-  or another IVR.
+- `ivr`: answers, plays the configured prompt, collects one digit with `play_and_get_digits`, and
+  then dispatches the result through a second generated extension using `execute_extension`. In
+  `offline` media delivery mode, the prompt path must come from a completed
+  `VoipPabxMediaFileSync` for the target PABX server. In `online` media delivery mode, the XML Curl
+  renderer must provide the prompt as
+  `<api-origin>/api/v1/pabx/media/<nodeUUID>/<mediaUUID>/content/<filename>?token=<node-token>`.
+  The API endpoint proxies the tenant-scoped media content and the filename suffix preserves a real
+  audio extension for PBX media handling. Some FreeSWITCH 1.11 packages expose `mod_http_cache`
+  APIs while failing to register the `http_cache://` file interface, so the renderer must not rely
+  on remote HTTP file formats at call time. For online prompts, XML Curl downloads the URL with
+  `curl` into `/var/cache/freeswitch/mnscloud/${uuid}-ivr.wav`, plays that local file, and then
+  collects the digit with `play_and_get_digits` using the documented `silence` prompt. The installer
+  must keep `/var/cache/freeswitch/mnscloud` writable by the `freeswitch` user. If no playable media path can be
+  resolved, the renderer intentionally falls back to
+  `silence_stream://1000` rather than blocking the route. IVR digit matching must happen after digit
+  collection; conditions that read `${ivr_digit}` in the same XML condition that collects the digit
+  will be evaluated too early by FreeSWITCH.
 
 This keeps route changes API/database driven. FreeSWITCH only needs XML Curl active and does not need
 static per-route dialplan files.
+
+When a bridge destination cannot be reached, the API-generated dialplan must not leave the caller in
+synthetic ringback. The expected fallback causes are `USER_NOT_REGISTERED` for direct extension
+routes, `NO_ANSWER` for groups/queues with no reachable members, and `NORMAL_TEMPORARY_FAILURE` for
+external/gateway failures. Voicemail or alternate forwarding should be modeled as an explicit route
+or future feature, not as an implicit engine fallback.
 
 ## Install
 

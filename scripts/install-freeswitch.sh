@@ -414,7 +414,7 @@ install_pkgs() {
         freeswitch-mod-hash freeswitch-mod-lua freeswitch-mod-conference \
         freeswitch-mod-opus freeswitch-mod-av freeswitch-mod-sndfile freeswitch-mod-native-file \
         freeswitch-mod-local-stream freeswitch-mod-tone-stream freeswitch-mod-say-en \
-        freeswitch-mod-json-cdr freeswitch-mod-mariadb \
+        freeswitch-mod-json-cdr freeswitch-mod-mariadb freeswitch-mod-http-cache \
         build-essential git cmake pkg-config \
         unixodbc odbc-mariadb libbcg729-0 libbcg729-dev \
         sngrep tcpdump ngrep dnsutils traceroute mtr-tiny netcat-openbsd jq"
@@ -475,6 +475,46 @@ module_file_exists() {
   find /usr/lib /usr/lib64 -path "*/freeswitch/mod/${module}.so" -print -quit 2>/dev/null | grep -q .
 }
 
+ensure_http_cache_runtime() {
+  local path="/var/cache/freeswitch"
+  local prefix
+  info "Preparing FreeSWITCH HTTP media cache at ${path}"
+  run "mkdir -p '${path}'"
+  run "mkdir -p '${path}/mnscloud'"
+  for prefix in {0..255}; do
+    run "mkdir -p '${path}/$(printf '%02x' "${prefix}")'"
+  done
+  if id freeswitch >/dev/null 2>&1; then
+    run "chown -R freeswitch:freeswitch '${path}'"
+  fi
+  run "chmod 0750 '${path}'"
+  run "find '${path}' -type d -exec chmod 0750 {} \\;"
+}
+
+write_http_cache_config() {
+  local path="/etc/freeswitch/autoload_configs/http_cache.conf.xml"
+  info "Writing FreeSWITCH HTTP media cache configuration to ${path}"
+  if [[ ! -d "$(dirname "$path")" ]]; then
+    run "mkdir -p '$(dirname "$path")'"
+  fi
+  backup_once "$path"
+  write_file "$path" '<configuration name="http_cache.conf" description="HTTP GET media cache">
+  <settings>
+    <param name="enable-file-formats" value="true"/>
+    <param name="max-urls" value="10000"/>
+    <param name="location" value="/var/cache/freeswitch"/>
+    <param name="default-max-age" value="3600"/>
+    <param name="prefetch-thread-count" value="8"/>
+    <param name="prefetch-queue-size" value="100"/>
+    <param name="ssl-cacert" value="/etc/ssl/certs/ca-certificates.crt"/>
+    <param name="ssl-verifypeer" value="true"/>
+    <param name="ssl-verifyhost" value="true"/>
+  </settings>
+</configuration>
+'
+  run "chmod 0644 '${path}'"
+}
+
 write_modules_config() {
   local path="/etc/freeswitch/autoload_configs/modules.conf.xml"
   local module modules_xml=""
@@ -499,6 +539,7 @@ write_modules_config() {
     mod_say_en
     mod_lua
     mod_curl
+    mod_http_cache
     mod_json_cdr
     mod_mariadb
     mod_bcg729
@@ -1123,6 +1164,9 @@ main() {
   ensure_module_loaded "mod_commands"
   ensure_module_loaded "mod_sndfile"
   ensure_module_loaded "mod_native_file"
+  ensure_module_loaded "mod_http_cache"
+  ensure_http_cache_runtime
+  write_http_cache_config
   disable_module_loaded "mod_com_g729"
   disable_module_loaded "mod_g729"
   build_mod_bcg729 || true
