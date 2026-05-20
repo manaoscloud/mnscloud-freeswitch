@@ -16,13 +16,18 @@ contract. It can run on MNSCloud, customer, or partner infrastructure.
 
 ## Install
 
-Install GitHub CLI if needed, then authenticate before cloning this private
-repository: [cli/cli installation](https://github.com/cli/cli#installation).
+Install GitHub CLI if needed:
+[cli/cli installation](https://github.com/cli/cli#installation).
+
+Authenticate GitHub CLI:
 
 ```bash
 gh auth login
-gh auth status
+```
 
+Clone the private repository and install:
+
+```bash
 sudo install -d -m 0755 /opt/mnscloud
 cd /opt/mnscloud
 gh repo clone manaoscloud/mnscloud-freeswitch
