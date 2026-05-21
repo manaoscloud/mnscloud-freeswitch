@@ -14,6 +14,23 @@ contract. It can run on MNSCloud, customer, or partner infrastructure.
 - Do not commit secrets, customer data, production infrastructure values, provider credentials, or
   private business rules.
 
+## Contract
+
+- Product/runtime: `mnscloud-freeswitch`
+- Project directory: `/opt/mnscloud/mnscloud-freeswitch`
+- Installer: `scripts/install-freeswitch.sh`
+- Service: `freeswitch.service`
+- Local state prefix: `/etc/mnscloud/pabx`
+- Node UUID: `/etc/mnscloud/pabx/node.uuid`
+- API token: `/etc/mnscloud/pabx/api.token`
+- API base URL: `/etc/mnscloud/pabx/api.base`
+- SignalWire repository token: `/etc/mnscloud/pabx/signalwire-repo.token`
+- ESL secret: `/etc/mnscloud/pabx/freeswitch-esl.secret`
+- FreeSWITCH config directory: `/etc/freeswitch`
+- FreeSWITCH recordings: `/var/lib/freeswitch/recordings`
+- XML Curl config: `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`
+- Event Socket config: `/etc/freeswitch/autoload_configs/event_socket.conf.xml`
+
 ## Install
 
 Install GitHub CLI if needed:
