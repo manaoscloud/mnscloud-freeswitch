@@ -52,4 +52,8 @@ cd /opt/mnscloud/mnscloud-freeswitch
 sudo bash scripts/install-freeswitch.sh
 ```
 
+During the interactive install, register the generated node UUID in the MNSCloud PABX server record.
+If you use `Generate install token` in the app, copy and run the generated command on this host
+before typing `validate`; it writes the API token expected by the platform.
+
 See `freeswitch.md` and `SECURITY.md` for details.

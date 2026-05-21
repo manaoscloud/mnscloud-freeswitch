@@ -20,6 +20,9 @@ monorepo at runtime.
 - Node UUIDs generated, persisted, displayed, or sent by installers must be normalized to lowercase.
 - Local secrets must be generated on the target host and stored with restrictive permissions.
 - Permanent provider credentials stay in the API/control plane.
+- If the app generates a PABX install token, the operator must copy/run the generated command on the
+  FreeSWITCH host so `/etc/mnscloud/pabx/api.token` matches the API-side hash before installer
+  validation.
 
 ## Contract
 
@@ -27,6 +30,7 @@ monorepo at runtime.
 - Local installer: `scripts/install-freeswitch.sh`
 - Runtime API consumer: MNSCloud PABX FreeSWITCH endpoints under `/api/v1/pabx/freeswitch/*`
 - Local state prefix: `/etc/mnscloud/pabx`
+- Token state: `/etc/mnscloud/pabx/api.token` must match `VoipPabxServer.VpsApiTokenHash`.
 
 ## Checklist
 

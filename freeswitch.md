@@ -61,6 +61,29 @@ installer does not execute direct SQL to bind `VpsNodeUUID`; it generates a per-
 hash in `VoipPabxServer.VpsApiTokenHash`. The same token is sent by XML Curl on every protected
 fetch.
 
+When provisioning from the MNSCloud app, use one of these flows:
+
+1. Installer-generated token:
+   - Run `scripts/install-freeswitch.sh`.
+   - Copy the generated `/etc/mnscloud/pabx/node.uuid` value into the PABX server record.
+   - Do not generate an install token in the app.
+   - Type `validate` in the installer. The first successful heartbeat stores the hash for the local
+     `/etc/mnscloud/pabx/api.token`.
+
+2. App-generated install token:
+   - Run `scripts/install-freeswitch.sh` until it prints the node UUID and waits for validation.
+   - Copy the node UUID into the PABX server record and save it.
+   - Click `Generate install token` in the PABX server row.
+   - Copy and run the generated command on the FreeSWITCH host. The command writes
+     `/etc/mnscloud/pabx/node.uuid`, writes `/etc/mnscloud/pabx/api.token`, and validates the
+     heartbeat against the API.
+   - Return to the installer and type `validate`.
+
+Do not update `VpsNodeUUID` manually while leaving an old `VpsApiTokenHash` in place. A token hash
+belongs to one generated token; if the node UUID is replaced but the hash is kept, the installer will
+return HTTP 401 until the matching token is installed or the hash is rotated/cleared through the
+application flow.
+
 ## Codecs
 
 The mnscloud default media order is:
@@ -230,6 +253,9 @@ If these are provided, the installer writes `/etc/odbc.ini`:
   `VpsPublicIPv6`, `VpsPrivateIPv4`, or `VpsPrivateIPv6` matching this host, or copy
   `/etc/mnscloud/pabx/node.uuid` into `VpsNodeUUID`.
 - Confirm the API is reachable at `$(cat /etc/mnscloud/pabx/api.base)/api/v1/pabx/freeswitch`.
+- HTTP 401 during installer validation means `/etc/mnscloud/pabx/api.token` does not match the hash
+  stored on the PABX server record. If `Generate install token` was used in the app, copy and run the
+  generated command on the FreeSWITCH host before typing `validate`.
 - HTTP 401 from `mod_xml_curl` means the Basic Auth password generated from
   `/etc/mnscloud/pabx/api.token` does not match the API-side PABX token, or FreeSWITCH has not
   reloaded `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`.
