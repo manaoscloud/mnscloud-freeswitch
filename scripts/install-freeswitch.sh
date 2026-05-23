@@ -15,7 +15,7 @@ ENV_FILE="${MNSCLOUD_MONOREPO_ROOT:-${PROJECT_ROOT}}/.env"
 # Configuration variables
 # ==========================================================
 NODE_UUID_FILE="/etc/mnscloud/pabx/node.uuid"
-API_TOKEN_FILE="/etc/mnscloud/pabx/api.token"
+API_TOKEN_FILE="/etc/mnscloud/pabx/runtime.token"
 API_BASE_FILE="/etc/mnscloud/pabx/api.base"
 SIGNALWIRE_REPO_TOKEN_FILE="/etc/mnscloud/pabx/signalwire-repo.token"
 DEFAULT_API_BASE="https://api.publichost.cloud"
@@ -229,18 +229,18 @@ ensure_control_secret() {
   run "chmod 0600 '${FS_CONTROL_SECRET_FILE}'"
 }
 
-ensure_api_token_file() {
+ensure_runtime_credential_file() {
   local dir
   dir="$(dirname "${API_TOKEN_FILE}")"
   [[ -d "$dir" ]] || run "mkdir -p '${dir}'"
 
   if [[ -f "${API_TOKEN_FILE}" ]]; then
     API_TOKEN="$(tr -d '[:space:]' < "${API_TOKEN_FILE}")"
-    ok "PABX API token loaded from ${API_TOKEN_FILE}"
+    ok "PABX runtime credential loaded from ${API_TOKEN_FILE}"
   else
     API_TOKEN="$(generate_secret_32)"
     write_file "${API_TOKEN_FILE}" "${API_TOKEN}"
-    ok "PABX API token created at ${API_TOKEN_FILE}"
+    ok "PABX runtime credential created at ${API_TOKEN_FILE}"
   fi
 
   if getent group freeswitch >/dev/null 2>&1; then
@@ -659,8 +659,8 @@ write_xml_curl() {
   [[ -d /var/log/freeswitch/xml_curl ]] || run "mkdir -p /var/log/freeswitch/xml_curl"
   backup_once "$path"
 
-  local api_token_xml
-  api_token_xml="$(xml_escape_attr "${API_TOKEN}")"
+  local runtime_credential_xml
+  runtime_credential_xml="$(xml_escape_attr "${API_TOKEN}")"
 
   write_file "$path" "\
 <?xml version=\"1.0\" encoding=\"UTF-8\"?>
@@ -674,7 +674,7 @@ write_xml_curl() {
       <param name=\"timeout\" value=\"10\"/>
       <param name=\"retry\" value=\"1\"/>
       <param name=\"log-dir\" value=\"/var/log/freeswitch/xml_curl\"/>
-      <param name=\"gateway-credentials\" value=\"mnscloud:${api_token_xml}\"/>
+      <param name=\"gateway-credentials\" value=\"mnscloud:${runtime_credential_xml}\"/>
       <param name=\"auth-scheme\" value=\"basic\"/>
     </binding>
     <binding name=\"pabx-dialplan\">
@@ -685,7 +685,7 @@ write_xml_curl() {
       <param name=\"timeout\" value=\"10\"/>
       <param name=\"retry\" value=\"1\"/>
       <param name=\"log-dir\" value=\"/var/log/freeswitch/xml_curl\"/>
-      <param name=\"gateway-credentials\" value=\"mnscloud:${api_token_xml}\"/>
+      <param name=\"gateway-credentials\" value=\"mnscloud:${runtime_credential_xml}\"/>
       <param name=\"auth-scheme\" value=\"basic\"/>
     </binding>
     <binding name=\"pabx-configuration\">
@@ -696,7 +696,7 @@ write_xml_curl() {
       <param name=\"timeout\" value=\"10\"/>
       <param name=\"retry\" value=\"1\"/>
       <param name=\"log-dir\" value=\"/var/log/freeswitch/xml_curl\"/>
-      <param name=\"gateway-credentials\" value=\"mnscloud:${api_token_xml}\"/>
+      <param name=\"gateway-credentials\" value=\"mnscloud:${runtime_credential_xml}\"/>
       <param name=\"auth-scheme\" value=\"basic\"/>
     </binding>
   </bindings>
@@ -713,8 +713,8 @@ write_json_cdr_config() {
   [[ -d /var/log/freeswitch/json_cdr/errors ]] || run "mkdir -p /var/log/freeswitch/json_cdr/errors"
   backup_once "$path"
 
-  local api_token_xml
-  api_token_xml="$(xml_escape_attr "${API_TOKEN}")"
+  local runtime_credential_xml
+  runtime_credential_xml="$(xml_escape_attr "${API_TOKEN}")"
 
   write_file "$path" "\
 <?xml version=\"1.0\" encoding=\"UTF-8\"?>
@@ -728,7 +728,7 @@ write_json_cdr_config() {
     <param name=\"err-log-dir\" value=\"/var/log/freeswitch/json_cdr/errors\"/>
     <param name=\"url\" value=\"${API_BASE}/api/v1/voip/pabx/cdr/freeswitch/internal/${NODE_UUID}\"/>
     <param name=\"auth-scheme\" value=\"basic\"/>
-    <param name=\"cred\" value=\"mnscloud:${api_token_xml}\"/>
+    <param name=\"cred\" value=\"mnscloud:${runtime_credential_xml}\"/>
     <param name=\"encode\" value=\"false\"/>
     <param name=\"retries\" value=\"2\"/>
     <param name=\"delay\" value=\"5000\"/>
@@ -1091,7 +1091,7 @@ heartbeat() {
   else
     warn "FreeSWITCH heartbeat returned HTTP ${http_code:-000}. Check that the API is updated/restarted and that the FreeSWITCH server is registered. Response: $(tr '\n' ' ' < "${response_file}" | head -c 200)"
     if [[ "${http_code}" == "401" ]]; then
-      warn "HTTP 401 means the local api.token does not match the server token hash, or the API was not updated/restarted with first-heartbeat token initialization."
+      warn "HTTP 401 means the local runtime credential does not match the server-side credential hash."
     elif [[ "${http_code}" == "404" ]]; then
       warn "HTTP 404 means the Node UUID is not saved on an active FreeSWITCH VoipPabxServer record, or the record engine is different."
     fi
@@ -1102,7 +1102,7 @@ heartbeat() {
 
 wait_for_node_registration() {
   info "Node UUID for this FreeSWITCH host: ${NODE_UUID}"
-  info "Register this exact Node UUID in the correct VoipPabxServer FreeSWITCH record before continuing."
+  info "Confirm this host is assigned to an online MNSCloud Agent before continuing."
 
   if ! [[ -r /dev/tty && -w /dev/tty ]]; then
     warn "Interactive terminal is unavailable at /dev/tty; skipping Node UUID registration wait."
@@ -1139,7 +1139,7 @@ main() {
   load_env_file
   ensure_api_base_file
   ensure_node_uuid_file
-  ensure_api_token_file
+  ensure_runtime_credential_file
   ensure_control_secret
   ensure_control_allowed_ips
 

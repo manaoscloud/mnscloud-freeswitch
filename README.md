@@ -22,7 +22,6 @@ contract. It can run on MNSCloud, customer, or partner infrastructure.
 - Service: `freeswitch.service`
 - Local state prefix: `/etc/mnscloud/pabx`
 - Node UUID: `/etc/mnscloud/pabx/node.uuid`
-- API token: `/etc/mnscloud/pabx/api.token`
 - API base URL: `/etc/mnscloud/pabx/api.base`
 - SignalWire repository token: `/etc/mnscloud/pabx/signalwire-repo.token`
 - ESL secret: `/etc/mnscloud/pabx/freeswitch-esl.secret`
@@ -52,8 +51,9 @@ cd /opt/mnscloud/mnscloud-freeswitch
 sudo bash scripts/install-freeswitch.sh
 ```
 
-During the interactive install, register the generated node UUID in the MNSCloud PABX server record.
-If you use `Generate install token` in the app, copy and run the generated command on this host
-before typing `validate`; it writes the API token expected by the platform.
+Before installing FreeSWITCH, enroll `mnscloud-agent` on the host and confirm it is online with the
+`voip.freeswitch.manage` capability. The platform issues only a short-lived Agent enrollment token to
+the operator; server runtime credentials are delivered to the host through Agent-controlled
+provisioning.
 
 See `freeswitch.md` and `SECURITY.md` for details.

@@ -43,52 +43,11 @@ The installer creates a persistent node UUID in `/etc/mnscloud/pabx/node.uuid` a
 The node UUID identifies the physical FreeSWITCH installation. The API resolves that value to
 `VoipPabxServer.VpsUUID` internally, so FreeSWITCH does not need to know the database record UUID.
 
-During an interactive install, the node UUID is generated near the start of the run. The installer
-prints the UUID and waits so the operator can register that exact UUID on the correct FreeSWITCH
-`VoipPabxServer` record. The operator must type `validate`; an empty ENTER does not confirm the
-registration. The installer then validates the registration through the heartbeat API before
-continuing. If the registration cannot be validated and the operator explicitly types `skip`, the
-installer continues and falls back to public IPv4 discovery for SIP/RTP advertisement, then
-`auto-nat`.
-
-The confirmation prompt reads and writes through `/dev/tty`, so it still works when the installer is
-started by a wrapper script that uses standard input internally. Only fully non-interactive sessions
-without a controlling terminal skip this wait.
-
-The preferred production flow is Agent-first provisioning. Before FreeSWITCH is installed, the host
+Production provisioning is Agent-first. Before FreeSWITCH is installed, the host
 should have `mnscloud-agent` enrolled, online, and declaring `voip.freeswitch.manage`. The app
 creates only a short-lived Agent enrollment token; the Agent runtime token is issued directly to the
-server and is never shown in the browser. After the Agent is online, PABX token rotation and local
-runtime updates should be applied through Agent jobs.
-
-The manual fallback flow still uses Node UUID registration plus API heartbeat validation.
-The installer does not execute direct SQL to bind `VpsNodeUUID`; it generates a per-server API token in
-`/etc/mnscloud/pabx/api.token`, sends it during heartbeat validation, and the API stores only its
-hash in `VoipPabxServer.VpsApiTokenHash`. The same token is sent by XML Curl on every protected
-fetch.
-
-When provisioning from the MNSCloud app, use one of these flows:
-
-1. Installer-generated token:
-   - Run `scripts/install-freeswitch.sh`.
-   - Copy the generated `/etc/mnscloud/pabx/node.uuid` value into the PABX server record.
-   - Do not generate an install token in the app.
-   - Type `validate` in the installer. The first successful heartbeat stores the hash for the local
-     `/etc/mnscloud/pabx/api.token`.
-
-2. App-generated install token:
-   - Run `scripts/install-freeswitch.sh` until it prints the node UUID and waits for validation.
-   - Copy the node UUID into the PABX server record and save it.
-   - Click `Generate install token` in the PABX server row.
-   - Copy and run the generated command on the FreeSWITCH host. The command writes
-     `/etc/mnscloud/pabx/node.uuid`, writes `/etc/mnscloud/pabx/api.token`, and validates the
-     heartbeat against the API.
-   - Return to the installer and type `validate`.
-
-Do not update `VpsNodeUUID` manually while leaving an old `VpsApiTokenHash` in place. A token hash
-belongs to one generated token; if the node UUID is replaced but the hash is kept, the installer will
-return HTTP 401 until the matching token is installed or the hash is rotated/cleared through the
-application flow.
+server and is never shown in the browser. Local PABX runtime updates should be applied through Agent
+jobs and recorded in tenant/global Activity Logs.
 
 ## Codecs
 
@@ -153,7 +112,7 @@ The minimal supported route types are:
   `offline` media delivery mode, the prompt path must come from a completed
   `VoipPabxMediaFileSync` for the target PABX server. In `online` media delivery mode, the XML Curl
   renderer must provide the prompt as
-  `<api-origin>/api/v1/pabx/media/<nodeUUID>/<mediaUUID>/content/<filename>?token=<node-token>`.
+  `<api-origin>/api/v1/pabx/media/<nodeUUID>/<mediaUUID>/content/<filename>?token=<runtime-credential>`.
   The API endpoint proxies the tenant-scoped media content and the filename suffix preserves a real
   audio extension for PBX media handling. Some FreeSWITCH 1.11 packages expose `mod_http_cache`
   APIs while failing to register the `http_cache://` file interface, so the renderer must not rely
@@ -262,12 +221,9 @@ If these are provided, the installer writes `/etc/odbc.ini`:
   `VpsPublicIPv6`, `VpsPrivateIPv4`, or `VpsPrivateIPv6` matching this host, or copy
   `/etc/mnscloud/pabx/node.uuid` into `VpsNodeUUID`.
 - Confirm the API is reachable at `$(cat /etc/mnscloud/pabx/api.base)/api/v1/pabx/freeswitch`.
-- HTTP 401 during installer validation means `/etc/mnscloud/pabx/api.token` does not match the hash
-  stored on the PABX server record. If `Generate install token` was used in the app, copy and run the
-  generated command on the FreeSWITCH host before typing `validate`.
-- HTTP 401 from `mod_xml_curl` means the Basic Auth password generated from
-  `/etc/mnscloud/pabx/api.token` does not match the API-side PABX token, or FreeSWITCH has not
-  reloaded `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`.
+- HTTP 401 from `mod_xml_curl` means the server-side runtime credential provisioned by the Agent is
+  not accepted by the API, or FreeSWITCH has not reloaded
+  `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`.
 - If plain `fs_cli` cannot connect, verify `/etc/fs_cli.conf` has a `[default]` section and the
   password matches `/etc/mnscloud/pabx/freeswitch-esl.secret`.
 - Confirm media support with `fs_cli -x "show codecs" | grep -Ei "G729|H264"` and
