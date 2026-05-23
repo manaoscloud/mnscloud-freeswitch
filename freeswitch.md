@@ -55,8 +55,14 @@ The confirmation prompt reads and writes through `/dev/tty`, so it still works w
 started by a wrapper script that uses standard input internally. Only fully non-interactive sessions
 without a controlling terminal skip this wait.
 
-The preferred and supported flow is manual Node UUID registration plus API heartbeat validation. The
-installer does not execute direct SQL to bind `VpsNodeUUID`; it generates a per-server API token in
+The preferred production flow is Agent-first provisioning. Before FreeSWITCH is installed, the host
+should have `mnscloud-agent` enrolled, online, and declaring `voip.freeswitch.manage`. The app
+creates only a short-lived Agent enrollment token; the Agent runtime token is issued directly to the
+server and is never shown in the browser. After the Agent is online, PABX token rotation and local
+runtime updates should be applied through Agent jobs.
+
+The manual fallback flow still uses Node UUID registration plus API heartbeat validation.
+The installer does not execute direct SQL to bind `VpsNodeUUID`; it generates a per-server API token in
 `/etc/mnscloud/pabx/api.token`, sends it during heartbeat validation, and the API stores only its
 hash in `VoipPabxServer.VpsApiTokenHash`. The same token is sent by XML Curl on every protected
 fetch.
