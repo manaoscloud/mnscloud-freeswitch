@@ -137,8 +137,11 @@ The minimal supported route types are:
   when the target is an external destination record, or through the first tenant gateway when the
   route stores a free number.
 - `group`: bridges to enabled group members in priority order.
-- `queue`: bridges to enabled queue members in priority order. This is intentionally a simple
-  receive-and-send queue behavior; advanced `mod_callcenter` behavior is a separate layer.
+- `queue`: uses the native `mod_callcenter` application for FreeSWITCH-backed PABX queues. XML Curl
+  serves `callcenter.conf` from the canonical `VoipPabxQueue`, `VoipPabxQueueMember`, and
+  `VoipPabxQueueAgent` records. When a queue member extension has a queue agent, `LOGGED_OUT`
+  removes it from the active tier, `AVAILABLE` exposes it as available, and `PAUSED` exposes it as
+  `On Break`. Extensions without a queue agent remain fixed queue members for compatibility.
 - `ivr`: answers, plays the configured prompt, collects one digit with `play_and_get_digits`, and
   then dispatches the result through a second generated extension using `execute_extension`. In
   `offline` media delivery mode, the prompt path must come from a completed

@@ -525,6 +525,7 @@ write_modules_config() {
     mod_event_socket
     mod_sofia
     mod_commands
+    mod_callcenter
     mod_conference
     mod_db
     mod_dptools
@@ -1162,6 +1163,7 @@ main() {
   ensure_module_loaded "mod_conference"
   ensure_module_loaded "mod_dptools"
   ensure_module_loaded "mod_commands"
+  ensure_module_loaded "mod_callcenter"
   ensure_module_loaded "mod_sndfile"
   ensure_module_loaded "mod_native_file"
   ensure_module_loaded "mod_http_cache"
