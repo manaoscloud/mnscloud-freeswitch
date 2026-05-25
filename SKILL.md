@@ -19,9 +19,11 @@ monorepo at runtime.
 - Use placeholders in examples: `<api_base>`, `<node_uuid>`, `<token>`, `<tenant_domain>`.
 - Node UUIDs generated, persisted, displayed, or sent by installers must be normalized to lowercase.
 - Local secrets must be generated on the target host and stored with restrictive permissions.
-- Permanent provider credentials stay in the API/control plane.
-- Provisioning is Agent-first. The app may expose only a short-lived Agent enrollment token; runtime
-  credentials must be delivered server-side through Agent jobs and never copied from the browser.
+- Permanent provider credentials stay out of source control. SignalWire repository tokens may be
+  provided interactively, by protected local file, environment variable, or installer argument.
+- UI-generated PABX install commands may expose the server runtime token only once. The API must
+  store only its hash, and regenerating the command must replace the previous token.
+- Agent remains the preferred executor for remote operational commands after installation.
 
 ## Contract
 
@@ -29,7 +31,8 @@ monorepo at runtime.
 - Local installer: `scripts/install-freeswitch.sh`
 - Runtime API consumer: MNSCloud PABX FreeSWITCH endpoints under `/api/v1/pabx/freeswitch/*`
 - Local state prefix: `/etc/mnscloud/pabx`
-- Runtime credentials are server-side state and must not be exposed through UI install-token flows.
+- Install flags: `--api-base`, `--node-uuid`, `--runtime-token`/`--install-token`, and optional
+  `--signalwire-token`.
 
 ## Checklist
 

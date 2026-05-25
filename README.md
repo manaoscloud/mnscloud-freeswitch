@@ -51,9 +51,22 @@ cd /opt/mnscloud/mnscloud-freeswitch
 sudo bash scripts/install-freeswitch.sh
 ```
 
-Before installing FreeSWITCH, enroll `mnscloud-agent` on the host and confirm it is online with the
-`voip.freeswitch.manage` capability. The platform issues only a short-lived Agent enrollment token to
-the operator; server runtime credentials are delivered to the host through Agent-controlled
-provisioning.
+The recommended production flow is to create the FreeSWITCH PABX server in MNSCloud and use
+**Generate Install Command**. The platform returns a visible-once runtime token, stores only its hash,
+and generates a command that clones/updates this repository and runs:
+
+```bash
+sudo bash scripts/install-freeswitch.sh \
+  --api-base <api_base> \
+  --node-uuid <node_uuid> \
+  --runtime-token <visible_once_runtime_token>
+```
+
+FreeSWITCH package installation still requires the SignalWire repository token. Provide it
+interactively when prompted, through the local `/etc/mnscloud/pabx/signalwire-repo.token` file, or
+through `SIGNALWIRE_REPO_TOKEN`/`--signalwire-token`. Do not commit this provider token.
+
+For remote command execution, enroll `mnscloud-agent` on the host and confirm it is online with the
+`voip.freeswitch.manage` capability.
 
 See `freeswitch.md` and `SECURITY.md` for details.

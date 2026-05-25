@@ -21,7 +21,7 @@ SIGNALWIRE_REPO_TOKEN_FILE="/etc/mnscloud/pabx/signalwire-repo.token"
 DEFAULT_API_BASE="https://api.publichost.cloud"
 NODE_UUID=""
 API_BASE=""
-TOKEN=""
+TOKEN="${SIGNALWIRE_REPO_TOKEN:-}"
 API_TOKEN=""
 FS_DB_HOST="${FS_DB_HOST:-${DB_HOST:-}}"
 FS_DB_PORT="${FS_DB_PORT:-${DB_PORT:-3306}}"
@@ -42,6 +42,36 @@ BCG729_SOURCE_URL="${FREESWITCH_BCG729_SOURCE_URL:-https://github.com/xadhoom/mo
 BCG729_SOURCE_REF="${FREESWITCH_BCG729_SOURCE_REF:-4203247dee4719545005ec7ab9ea536fc83df1d8}"
 BCG729_BUILD_DIR="${FREESWITCH_BCG729_BUILD_DIR:-/usr/src/mnscloud-mod-bcg729}"
 BCG729_BUNDLED_SOURCE_DIR="${FREESWITCH_BCG729_BUNDLED_SOURCE_DIR:-${PROJECT_ROOT}/codecs/mod_bcg729}"
+
+parse_cli_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --api-base)
+        API_BASE="${2:-}"
+        shift 2
+        ;;
+      --node-uuid)
+        NODE_UUID="${2:-}"
+        shift 2
+        ;;
+      --runtime-token | --install-token)
+        API_TOKEN="${2:-}"
+        shift 2
+        ;;
+      --signalwire-token)
+        TOKEN="${2:-}"
+        shift 2
+        ;;
+      --dry-run)
+        shift
+        ;;
+      *)
+        err "Unknown argument: $1"
+        exit 2
+        ;;
+    esac
+  done
+}
 
 load_env_file() {
   if [[ -f "${ENV_FILE}" ]]; then
@@ -98,7 +128,12 @@ ensure_api_base_file() {
   dir="$(dirname "${API_BASE_FILE}")"
   [[ -d "$dir" ]] || run "mkdir -p '${dir}'"
 
-  if [[ -f "${API_BASE_FILE}" ]]; then
+  if [[ -n "${API_BASE}" ]]; then
+    API_BASE="$(normalize_url "${API_BASE}")"
+    validate_api_base "${API_BASE}" || { err "URL base da API invalida: ${API_BASE}"; return 1; }
+    write_file "${API_BASE_FILE}" "${API_BASE}"
+    ok "API base saved to ${API_BASE_FILE}: ${API_BASE}"
+  elif [[ -f "${API_BASE_FILE}" ]]; then
     value="$(tr -d '[:space:]' < "${API_BASE_FILE}")"
     API_BASE="$(normalize_url "$value")"
     ok "API base carregada de ${API_BASE_FILE}: ${API_BASE}"
@@ -130,7 +165,14 @@ ensure_signalwire_repo_token_file() {
   dir="$(dirname "${SIGNALWIRE_REPO_TOKEN_FILE}")"
   [[ -d "$dir" ]] || run "mkdir -p '${dir}'"
 
-  if [[ -f "${SIGNALWIRE_REPO_TOKEN_FILE}" ]]; then
+  if [[ -n "${TOKEN}" ]]; then
+    if [[ "${TOKEN}" =~ [[:space:]] ]]; then
+      err "SignalWire repository token cannot contain spaces."
+      return 1
+    fi
+    write_file "${SIGNALWIRE_REPO_TOKEN_FILE}" "${TOKEN}"
+    ok "SignalWire repository token saved to ${SIGNALWIRE_REPO_TOKEN_FILE}"
+  elif [[ -f "${SIGNALWIRE_REPO_TOKEN_FILE}" ]]; then
     TOKEN="$(tr -d '[:space:]' < "${SIGNALWIRE_REPO_TOKEN_FILE}")"
     ok "SignalWire repository token loaded from ${SIGNALWIRE_REPO_TOKEN_FILE}"
   else
@@ -234,7 +276,10 @@ ensure_runtime_credential_file() {
   dir="$(dirname "${API_TOKEN_FILE}")"
   [[ -d "$dir" ]] || run "mkdir -p '${dir}'"
 
-  if [[ -f "${API_TOKEN_FILE}" ]]; then
+  if [[ -n "${API_TOKEN}" ]]; then
+    write_file "${API_TOKEN_FILE}" "${API_TOKEN}"
+    ok "PABX runtime credential saved to ${API_TOKEN_FILE}"
+  elif [[ -f "${API_TOKEN_FILE}" ]]; then
     API_TOKEN="$(tr -d '[:space:]' < "${API_TOKEN_FILE}")"
     ok "PABX runtime credential loaded from ${API_TOKEN_FILE}"
   else
@@ -256,7 +301,10 @@ ensure_node_uuid_file() {
   dir="$(dirname "${NODE_UUID_FILE}")"
   [[ -d "$dir" ]] || run "mkdir -p '${dir}'"
 
-  if [[ -f "${NODE_UUID_FILE}" ]]; then
+  if [[ -n "${NODE_UUID}" ]]; then
+    write_file "${NODE_UUID_FILE}" "${NODE_UUID}"
+    ok "Node UUID saved to ${NODE_UUID_FILE}: ${NODE_UUID}"
+  elif [[ -f "${NODE_UUID_FILE}" ]]; then
     NODE_UUID="$(tr -d '[:space:]' < "${NODE_UUID_FILE}")"
     ok "Node UUID loaded from ${NODE_UUID_FILE}: ${NODE_UUID}"
   else
@@ -1133,6 +1181,7 @@ wait_for_node_registration() {
 main() {
   banner "freeswitch      PABX - FreeSWITCH 1.11.x (official repository)" "Debian 12"
   require_root
+  parse_cli_args "$@"
   local app_security_script="${MNSCLOUD_MONOREPO_ROOT:-${PROJECT_ROOT}}/scripts/application-security.sh"
   [[ -f "${app_security_script}" ]] && run_script "${app_security_script}"
   ensure_local_hostname_hosts
