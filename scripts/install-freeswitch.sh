@@ -175,6 +175,9 @@ ensure_signalwire_repo_token_file() {
   elif [[ -f "${SIGNALWIRE_REPO_TOKEN_FILE}" ]]; then
     TOKEN="$(tr -d '[:space:]' < "${SIGNALWIRE_REPO_TOKEN_FILE}")"
     ok "SignalWire repository token loaded from ${SIGNALWIRE_REPO_TOKEN_FILE}"
+  elif fetch_signalwire_repo_token_from_api; then
+    write_file "${SIGNALWIRE_REPO_TOKEN_FILE}" "${TOKEN}"
+    ok "SignalWire repository token fetched from API and saved to ${SIGNALWIRE_REPO_TOKEN_FILE}"
   else
     while true; do
       TOKEN="$(prompt_secret_value "Enter the SignalWire repository token/PAT")"
@@ -1087,6 +1090,46 @@ json_escape() {
   value="${value//$'\n'/\\n}"
   value="${value//$'\r'/}"
   printf '%s' "$value"
+}
+
+fetch_signalwire_repo_token_from_api() {
+  local response_file http_code token
+  [[ -n "${API_BASE}" && -n "${NODE_UUID}" && -n "${API_TOKEN}" ]] || return 1
+
+  ensure_curl_for_validation
+  if $DRY_RUN; then
+    log DRY "POST ${API_BASE}/api/v1/pabx/freeswitch/install-config?node_uuid=${NODE_UUID}"
+    TOKEN="${TOKEN:-DRY_RUN_SIGNALWIRE_TOKEN}"
+    return 0
+  fi
+
+  response_file="$(mktemp)"
+  set +e
+  http_code="$(curl -sS -o "${response_file}" -w "%{http_code}" -X POST "${API_BASE}/api/v1/pabx/freeswitch/install-config?node_uuid=${NODE_UUID}" -H "Content-Type: application/json" -H "Authorization: Bearer ${API_TOKEN}" --data "{}" 2>>"${LOG_FILE}")"
+  set -e
+
+  if [[ "${http_code}" == "200" ]]; then
+    token="$(json_field "signalWireRepoToken" "${response_file}")"
+    rm -f "${response_file}"
+    if [[ -n "${token}" && ! "${token}" =~ [[:space:]] ]]; then
+      TOKEN="${token}"
+      return 0
+    fi
+    warn "API returned an empty or invalid SignalWire repository token."
+    return 1
+  fi
+
+  if [[ "${http_code}" == "401" ]]; then
+    warn "Could not fetch SignalWire token from API: runtime credential is invalid."
+  elif [[ "${http_code}" == "404" ]]; then
+    warn "Could not fetch SignalWire token from API: FreeSWITCH node UUID is not registered."
+  elif [[ "${http_code}" == "409" ]]; then
+    warn "SignalWire repository token is not configured or active in master Parameters."
+  else
+    warn "Could not fetch SignalWire token from API. HTTP ${http_code:-000}."
+  fi
+  rm -f "${response_file}"
+  return 1
 }
 
 heartbeat() {

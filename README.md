@@ -62,9 +62,11 @@ sudo bash scripts/install-freeswitch.sh \
   --runtime-token <visible_once_runtime_token>
 ```
 
-FreeSWITCH package installation still requires the SignalWire repository token. Provide it
-interactively when prompted, through the local `/etc/mnscloud/pabx/signalwire-repo.token` file, or
-through `SIGNALWIRE_REPO_TOKEN`/`--signalwire-token`. Do not commit this provider token.
+FreeSWITCH package installation still requires the SignalWire repository token. In the recommended
+flow, configure it once in Master Parameters > Integrations and the installer fetches it from the API
+with the node UUID and visible-once runtime token. You can still provide it interactively when
+prompted, through the local `/etc/mnscloud/pabx/signalwire-repo.token` file, or through
+`SIGNALWIRE_REPO_TOKEN`/`--signalwire-token`. Do not commit this provider token.
 
 For remote command execution, enroll `mnscloud-agent` on the host and confirm it is online with the
 `voip.freeswitch.manage` capability.
