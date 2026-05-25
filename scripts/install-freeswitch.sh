@@ -1195,7 +1195,7 @@ wait_for_node_registration() {
   info "Node UUID for this FreeSWITCH host: ${NODE_UUID}"
   info "Confirm this host is assigned to an online MNSCloud Agent before continuing."
 
-  if ! [[ -r /dev/tty && -w /dev/tty ]]; then
+  if $DRY_RUN || ! [[ -t 0 && -r /dev/tty && -w /dev/tty ]]; then
     warn "Interactive terminal is unavailable at /dev/tty; skipping Node UUID registration wait."
     return 1
   fi
@@ -1205,7 +1205,10 @@ wait_for_node_registration() {
   local answer
   while true; do
     printf "%s\n" "After registering the Node UUID in the platform, type 'validate' to test it, or type 'skip' to continue without validation: " >/dev/tty
-    IFS= read -r answer </dev/tty
+    if ! IFS= read -r answer </dev/tty; then
+      warn "Could not read from /dev/tty; skipping Node UUID registration wait."
+      return 1
+    fi
     if [[ "${answer,,}" == "skip" ]]; then
       warn "Node UUID registration was not validated. The installer will try HTTPS discovery and then auto-nat."
       return 1
@@ -1292,4 +1295,4 @@ main() {
   ok "Check /etc/freeswitch/autoload_configs/xml_curl.conf.xml and customize endpoints/headers if necessary."
 }
 
-main
+main "$@"
