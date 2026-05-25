@@ -1195,12 +1195,20 @@ wait_for_node_registration() {
   info "Node UUID for this FreeSWITCH host: ${NODE_UUID}"
   info "Confirm this host is assigned to an online MNSCloud Agent before continuing."
 
+  ensure_curl_for_validation
+
+  if [[ -n "${API_TOKEN}" ]]; then
+    info "Validating generated FreeSWITCH install credential with the API."
+    if heartbeat; then
+      return 0
+    fi
+    warn "Automatic API validation failed; falling back to interactive validation."
+  fi
+
   if $DRY_RUN || ! [[ -t 0 && -r /dev/tty && -w /dev/tty ]]; then
     warn "Interactive terminal is unavailable at /dev/tty; skipping Node UUID registration wait."
     return 1
   fi
-
-  ensure_curl_for_validation
 
   local answer
   while true; do
