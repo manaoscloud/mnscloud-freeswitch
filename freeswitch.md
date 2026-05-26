@@ -23,7 +23,7 @@ The installer lives at `scripts/install-freeswitch.sh` and performs:
    SIP/XML Curl/XML dialplan/audio file/tones/local stream runtime modules, build tools, `unixodbc`,
    `odbc-mariadb`, `libbcg729-0`, and `libbcg729-dev`.
    The installer also installs troubleshooting tools: `sngrep`, `tcpdump`, `ngrep`, `dnsutils`,
-   `traceroute`, `mtr-tiny`, `netcat-openbsd`, and `jq`.
+   `iputils-ping`, `traceroute`, `mtr-tiny`, `netcat-openbsd`, and `jq`.
 4. Managed module generation in `/etc/freeswitch/autoload_configs/modules.conf.xml`, loading only
    modules whose `.so` files are present on the host.
 5. XML Curl config generation at `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`.

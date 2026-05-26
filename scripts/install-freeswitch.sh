@@ -468,7 +468,7 @@ install_pkgs() {
         freeswitch-mod-json-cdr freeswitch-mod-mariadb freeswitch-mod-http-cache \
         build-essential git cmake pkg-config \
         unixodbc odbc-mariadb libbcg729-0 libbcg729-dev \
-        sngrep tcpdump ngrep dnsutils traceroute mtr-tiny netcat-openbsd jq"
+        sngrep tcpdump ngrep dnsutils iputils-ping traceroute mtr-tiny netcat-openbsd jq"
       if apt_install_optional "libfreeswitch-dev" "FreeSWITCH headers for optional mod_bcg729 build"; then
         :
       elif apt_install_optional "freeswitch-dev" "FreeSWITCH headers for optional mod_bcg729 build"; then
