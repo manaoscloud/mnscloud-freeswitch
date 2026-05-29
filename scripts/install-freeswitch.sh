@@ -463,6 +463,7 @@ install_pkgs() {
         freeswitch-mod-curl freeswitch-mod-commands freeswitch-mod-event-socket \
         freeswitch-mod-console freeswitch-mod-logfile freeswitch-mod-db \
         freeswitch-mod-hash freeswitch-mod-lua freeswitch-mod-conference \
+        freeswitch-mod-callcenter \
         freeswitch-mod-opus freeswitch-mod-av freeswitch-mod-sndfile freeswitch-mod-native-file \
         freeswitch-mod-local-stream freeswitch-mod-tone-stream freeswitch-mod-say-en \
         freeswitch-mod-json-cdr freeswitch-mod-mariadb freeswitch-mod-http-cache \
@@ -975,6 +976,7 @@ Option=3
 validate_media_codecs() {
   run "fs_cli -H 127.0.0.1 -P '${FS_CONTROL_PORT}' -p '${FS_CONTROL_SECRET}' -x 'show codecs' | grep -Ei 'G729|H264' || true"
   run "fs_cli -H 127.0.0.1 -P '${FS_CONTROL_PORT}' -p '${FS_CONTROL_SECRET}' -x 'module_exists mod_bcg729' || true"
+  run "fs_cli -H 127.0.0.1 -P '${FS_CONTROL_PORT}' -p '${FS_CONTROL_SECRET}' -x 'module_exists mod_callcenter' || true"
 }
 
 wait_for_freeswitch_cli() {

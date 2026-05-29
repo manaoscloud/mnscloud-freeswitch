@@ -20,8 +20,8 @@ The installer lives at `scripts/install-freeswitch.sh` and performs:
 3. Package install with explicit FreeSWITCH runtime modules, avoiding `freeswitch-meta-all`
    because that meta package pulls voicemail/mail transport dependencies such as `ssmtp`.
    The base package set includes `freeswitch`, `freeswitch-systemd`, `freeswitch-conf-vanilla`,
-   SIP/XML Curl/XML dialplan/audio file/tones/local stream runtime modules, build tools, `unixodbc`,
-   `odbc-mariadb`, `libbcg729-0`, and `libbcg729-dev`.
+   SIP/XML Curl/XML dialplan/call center/audio file/tones/local stream runtime modules, build
+   tools, `unixodbc`, `odbc-mariadb`, `libbcg729-0`, and `libbcg729-dev`.
    The installer also installs troubleshooting tools: `sngrep`, `tcpdump`, `ngrep`, `dnsutils`,
    `iputils-ping`, `traceroute`, `mtr-tiny`, `netcat-openbsd`, and `jq`.
 4. Managed module generation in `/etc/freeswitch/autoload_configs/modules.conf.xml`, loading only
@@ -102,8 +102,10 @@ The minimal supported route types are:
   when the target is an external destination record, or through the first tenant gateway when the
   route stores a free number.
 - `group`: bridges to enabled group members in priority order.
-- `queue`: uses the native `mod_callcenter` application for FreeSWITCH-backed PABX queues. XML Curl
-  serves `callcenter.conf` from the canonical `VoipPabxQueue`, `VoipPabxQueueMember`, and
+- `queue`: uses the native `mod_callcenter` application for FreeSWITCH-backed PABX queues. The
+  installer must install `freeswitch-mod-callcenter` and load `mod_callcenter`; without it,
+  basic PABX features continue to work but FreeSWITCH queue routes cannot execute. XML Curl serves
+  `callcenter.conf` from the canonical `VoipPabxQueue`, `VoipPabxQueueMember`, and
   `VoipPabxQueueAgent` records. When a queue member extension has a queue agent, `LOGGED_OUT`
   removes it from the active tier, `AVAILABLE` exposes it as available, and `PAUSED` exposes it as
   `On Break`. Extensions without a queue agent remain fixed queue members for compatibility.
