@@ -19,6 +19,7 @@ contract. It can run on MNSCloud, customer, or partner infrastructure.
 - Product/runtime: `mnscloud-freeswitch`
 - Project directory: `/opt/mnscloud/mnscloud-freeswitch`
 - Installer: `scripts/install-freeswitch.sh`
+- Shared package installer: `mnscloud-runtime-kit`
 - Service: `freeswitch.service`
 - Local state prefix: `/etc/mnscloud/pabx`
 - Node UUID: `/etc/mnscloud/pabx/node.uuid`

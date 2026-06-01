@@ -42,6 +42,10 @@ BCG729_SOURCE_URL="${FREESWITCH_BCG729_SOURCE_URL:-https://github.com/xadhoom/mo
 BCG729_SOURCE_REF="${FREESWITCH_BCG729_SOURCE_REF:-4203247dee4719545005ec7ab9ea536fc83df1d8}"
 BCG729_BUILD_DIR="${FREESWITCH_BCG729_BUILD_DIR:-/usr/src/mnscloud-mod-bcg729}"
 BCG729_BUNDLED_SOURCE_DIR="${FREESWITCH_BCG729_BUNDLED_SOURCE_DIR:-${PROJECT_ROOT}/codecs/mod_bcg729}"
+FREESWITCH_RUNTIME_KIT_DIR="${FREESWITCH_RUNTIME_KIT_DIR:-/opt/mnscloud/runtime-kit}"
+FREESWITCH_RUNTIME_KIT_REPO_URL="${FREESWITCH_RUNTIME_KIT_REPO_URL:-https://github.com/manaoscloud/mnscloud-runtime-kit.git}"
+FREESWITCH_RUNTIME_KIT_CHANNEL="${FREESWITCH_RUNTIME_KIT_CHANNEL:-stable}"
+FREESWITCH_RUNTIME_KIT_REF="${FREESWITCH_RUNTIME_KIT_REF:-}"
 
 parse_cli_args() {
   while [[ $# -gt 0 ]]; do
@@ -200,22 +204,7 @@ ensure_signalwire_repo_token_file() {
 }
 
 add_repo_debian() {
-  if [[ -n "${TOKEN}" ]]; then
-    info "Configuring SignalWire repository through fsget..."
-    run "apt-get update -y"
-    run "apt-get install -y ca-certificates curl gnupg"
-    run "curl -fsSL https://freeswitch.org/fsget | bash -s '${TOKEN}' release"
-    if [[ -n "${FREESWITCH_REPO_SUITE:-}" ]]; then
-      info "Forcando suite do repo: ${FREESWITCH_REPO_SUITE}"
-      run "sed -i \"s/^Suites: .*/Suites: ${FREESWITCH_REPO_SUITE}/\" /etc/apt/sources.list.d/freeswitch.sources"
-      run "apt-get update -y"
-    fi
-    return
-  fi
-
-  err "SignalWire repository token is missing. Run again and enter the token to save it at ${SIGNALWIRE_REPO_TOKEN_FILE}."
-  err "Veja: https://developer.signalwire.com/freeswitch/FreeSWITCH-Explained/Installation/Linux/Debian_67240088"
-  exit 2
+  warn "add_repo_debian is deprecated; FreeSWITCH packages are installed by mnscloud-runtime-kit."
 }
 
 detect_freeswitch_os() {
@@ -237,6 +226,47 @@ detect_freeswitch_os() {
 
   err "Unsupported operating system for FreeSWITCH. Supported: Debian 12."
   exit 2
+}
+
+resolve_runtime_kit_ref() {
+  local kit_dir="$1" channel="$2" manifest ref
+  manifest="$(git -C "$kit_dir" show "origin/main:releases/manifest.json" 2>/dev/null)" ||
+    { err "cannot read runtime kit release manifest from origin/main"; return 1; }
+  ref="$(printf '%s\n' "$manifest" | awk -v channel="$channel" '
+    $0 ~ "\"" channel "\"" { in_channel = 1; next }
+    in_channel && /"ref"[[:space:]]*:/ {
+      gsub(/.*"ref"[[:space:]]*:[[:space:]]*"/, "")
+      gsub(/".*/, "")
+      print
+      exit
+    }
+    in_channel && /^[[:space:]]*}/ { in_channel = 0 }
+  ')"
+  [[ "$ref" =~ ^v[0-9]+[.][0-9]+[.][0-9]+([-+][0-9A-Za-z.-]+)?$ ]] ||
+    { err "invalid runtime kit ref for channel ${channel}: ${ref:-empty}"; return 1; }
+  printf '%s\n' "$ref"
+}
+
+load_runtime_kit() {
+  [[ "${FREESWITCH_RUNTIME_KIT_LOADED:-0}" == "1" ]] && return 0
+  command -v git >/dev/null 2>&1 || run "apt-get update -y && apt-get install -y --no-install-recommends ca-certificates git"
+  if [[ -d "${FREESWITCH_RUNTIME_KIT_DIR}/.git" ]]; then
+    run "git -C '${FREESWITCH_RUNTIME_KIT_DIR}' fetch --all --tags --prune"
+  else
+    run "install -d -m 0755 '$(dirname "$FREESWITCH_RUNTIME_KIT_DIR")'"
+    run "git clone '${FREESWITCH_RUNTIME_KIT_REPO_URL}' '${FREESWITCH_RUNTIME_KIT_DIR}'"
+  fi
+  if [[ -z "$FREESWITCH_RUNTIME_KIT_REF" ]]; then
+    FREESWITCH_RUNTIME_KIT_REF="$(resolve_runtime_kit_ref "$FREESWITCH_RUNTIME_KIT_DIR" "$FREESWITCH_RUNTIME_KIT_CHANNEL")"
+    info "Resolved runtime kit ${FREESWITCH_RUNTIME_KIT_CHANNEL} channel to ${FREESWITCH_RUNTIME_KIT_REF}"
+  fi
+  run "git -C '${FREESWITCH_RUNTIME_KIT_DIR}' -c advice.detachedHead=false checkout '${FREESWITCH_RUNTIME_KIT_REF}'"
+  git -C "$FREESWITCH_RUNTIME_KIT_DIR" pull --ff-only origin "$FREESWITCH_RUNTIME_KIT_REF" 2>/dev/null || true
+  [[ -r "${FREESWITCH_RUNTIME_KIT_DIR}/lib/packages.sh" ]] || { err "runtime kit packages library not found"; return 1; }
+  export MNSCLOUD_RUNTIME_KIT_LOG_PREFIX="mnscloud-freeswitch/runtime-kit"
+  # shellcheck disable=SC1091
+  source "${FREESWITCH_RUNTIME_KIT_DIR}/lib/packages.sh"
+  FREESWITCH_RUNTIME_KIT_LOADED=1
 }
 
 generate_uuid() {
@@ -450,36 +480,14 @@ install_pkgs() {
   os="$(detect_freeswitch_os)"
   case "$os" in
     debian)
-      add_repo_debian
-      cleanup_broken_freeswitch_meta_packages
-      if [[ "$DRY_RUN" != true ]] && ! apt-cache show freeswitch freeswitch-systemd freeswitch-conf-vanilla >/dev/null 2>&1; then
-        err "FreeSWITCH packages were not found for the current suite."
-        err "Recommended action: use Debian 12 or set FREESWITCH_REPO_SUITE=bookworm and run the installer again."
-        exit 2
+      if [[ "$DRY_RUN" == true ]]; then
+        log DRY "load mnscloud-runtime-kit and run mrtk_ensure_freeswitch"
+        return 0
       fi
-      run "apt-get install -y --no-install-recommends \
-        freeswitch freeswitch-systemd freeswitch-conf-vanilla \
-        freeswitch-mod-sofia freeswitch-mod-dptools freeswitch-mod-dialplan-xml freeswitch-mod-xml-curl \
-        freeswitch-mod-curl freeswitch-mod-commands freeswitch-mod-event-socket \
-        freeswitch-mod-console freeswitch-mod-logfile freeswitch-mod-db \
-        freeswitch-mod-hash freeswitch-mod-lua freeswitch-mod-conference \
-        freeswitch-mod-callcenter \
-        freeswitch-mod-opus freeswitch-mod-av freeswitch-mod-sndfile freeswitch-mod-native-file \
-        freeswitch-mod-local-stream freeswitch-mod-tone-stream freeswitch-mod-say-en \
-        freeswitch-mod-json-cdr freeswitch-mod-mariadb freeswitch-mod-http-cache \
-        build-essential git cmake pkg-config \
-        unixodbc odbc-mariadb libbcg729-0 libbcg729-dev \
-        sngrep tcpdump ngrep dnsutils iputils-ping traceroute mtr-tiny netcat-openbsd jq"
-      if apt_install_optional "libfreeswitch-dev" "FreeSWITCH headers for optional mod_bcg729 build"; then
-        :
-      elif apt_install_optional "freeswitch-dev" "FreeSWITCH headers for optional mod_bcg729 build"; then
-        :
-      else
-        warn "FreeSWITCH headers package not found (libfreeswitch-dev/freeswitch-dev). mod_bcg729 compilation may fail without /usr/include/freeswitch/switch.h."
-      fi
-      if ! apt_install_optional "freeswitch-mod-bcg729" "prebuilt FreeSWITCH bcg729 module"; then
-        warn "Package freeswitch-mod-bcg729 was not found in the configured repositories. Official libbcg729 was installed; mod_bcg729 will be enabled only if the module exists on the system."
-      fi
+      load_runtime_kit
+      MNSCLOUD_FREESWITCH_SIGNALWIRE_TOKEN="$TOKEN" \
+      MNSCLOUD_FREESWITCH_REPO_SUITE="${FREESWITCH_REPO_SUITE:-}" \
+        mrtk_ensure_freeswitch
       ;;
     *)
       err "Unsupported operating system. Supported: Debian 12."
