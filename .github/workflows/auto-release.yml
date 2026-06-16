@@ -1,0 +1,28 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Optional explicit semantic version. When empty, patch is incremented from VERSION."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    uses: manaoscloud/mnscloud-runtime-kit/.github/workflows/auto-release.yml@main
+    with:
+      release_script: scripts/release-freeswitch.sh
+      version: ${{ github.event.inputs.version || '' }}
+      setup_deno: true
+      checkout_runtime_kit: true
+    secrets: inherit
