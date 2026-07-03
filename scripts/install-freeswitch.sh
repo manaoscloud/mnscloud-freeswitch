@@ -905,7 +905,7 @@ write_internal_profile() {
 <profile name=\"internal\">
   <settings>
     <param name=\"debug\" value=\"0\"/>
-    <param name=\"user-agent-string\" value=\"MNSCloud Freeswitch\"/>
+    <param name=\"user-agent-string\" value=\"MNSCloud Freeswitch PABX\"/>
     <param name=\"sip-trace\" value=\"no\"/>
     <param name=\"sip-capture\" value=\"no\"/>
     <param name=\"context\" value=\"public\"/>
