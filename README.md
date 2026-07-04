@@ -69,7 +69,9 @@ with the node UUID and visible-once runtime token. You can still provide it inte
 prompted, through the local `/etc/mnscloud/pabx/signalwire-repo.token` file, or through
 `SIGNALWIRE_REPO_TOKEN`/`--signalwire-token`. Do not commit this provider token.
 
-For remote command execution, enroll `mnscloud-agent` on the host and confirm it is online with the
-`voip.freeswitch.manage` capability.
+Before installing FreeSWITCH PABX, enroll `mnscloud-agent` on the host. The installer validates the
+shared Agent prerequisite contract with
+`/opt/mnscloud/mnscloud-agent/scripts/validate-agent.sh --require-active --require-enrolled`.
+After FreeSWITCH is installed, the Agent derives and reports `voip.freeswitch.manage`.
 
 See `freeswitch.md` and `SECURITY.md` for details.

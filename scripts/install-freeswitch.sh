@@ -46,6 +46,17 @@ FREESWITCH_RUNTIME_KIT_DIR="${FREESWITCH_RUNTIME_KIT_DIR:-/opt/mnscloud/runtime-
 FREESWITCH_RUNTIME_KIT_REPO_URL="${FREESWITCH_RUNTIME_KIT_REPO_URL:-https://github.com/manaoscloud/mnscloud-runtime-kit.git}"
 FREESWITCH_RUNTIME_KIT_CHANNEL="${FREESWITCH_RUNTIME_KIT_CHANNEL:-stable}"
 FREESWITCH_RUNTIME_KIT_REF="${FREESWITCH_RUNTIME_KIT_REF:-}"
+AGENT_VALIDATOR="/opt/mnscloud/mnscloud-agent/scripts/validate-agent.sh"
+
+validate_mnscloud_agent() {
+  if [[ "$DRY_RUN" == true ]]; then
+    log DRY "bash '${AGENT_VALIDATOR}' --require-active --require-enrolled"
+    return 0
+  fi
+  [[ -x "${AGENT_VALIDATOR}" ]] ||
+    { err "mnscloud-agent validator not found at ${AGENT_VALIDATOR}. Update/reinstall the Agent before installing FreeSWITCH PABX."; return 1; }
+  bash "${AGENT_VALIDATOR}" --require-active --require-enrolled
+}
 
 parse_cli_args() {
   while [[ $# -gt 0 ]]; do
@@ -1203,7 +1214,7 @@ heartbeat() {
 
 wait_for_node_registration() {
   info "Node UUID for this FreeSWITCH host: ${NODE_UUID}"
-  info "Confirm this host is assigned to an online MNSCloud Agent before continuing."
+  info "MNSCloud Agent prerequisite was validated before node registration."
 
   ensure_curl_for_validation
 
@@ -1246,6 +1257,7 @@ main() {
   banner "freeswitch      PABX - FreeSWITCH 1.11.x (official repository)" "Debian 12"
   require_root
   parse_cli_args "$@"
+  validate_mnscloud_agent
   local app_security_script="${MNSCLOUD_MONOREPO_ROOT:-${PROJECT_ROOT}}/scripts/application-security.sh"
   [[ -f "${app_security_script}" ]] && run_script "${app_security_script}"
   ensure_local_hostname_hosts

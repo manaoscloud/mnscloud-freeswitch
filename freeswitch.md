@@ -44,10 +44,12 @@ The node UUID identifies the physical FreeSWITCH installation. The API resolves 
 `VoipPabxServer.VpsUUID` internally, so FreeSWITCH does not need to know the database record UUID.
 
 Production provisioning is Agent-first. Before FreeSWITCH is installed, the host
-should have `mnscloud-agent` enrolled, online, and declaring `voip.freeswitch.manage`. The app
-creates only a short-lived Agent enrollment token; the Agent runtime token is issued directly to the
-server and is never shown in the browser. Local PABX runtime updates should be applied through Agent
-jobs and recorded in tenant/global Activity Logs.
+must have `mnscloud-agent` enrolled and active. The installer validates this with
+`/opt/mnscloud/mnscloud-agent/scripts/validate-agent.sh --require-active --require-enrolled`.
+After FreeSWITCH is installed, the Agent derives `voip.freeswitch.manage`. The app creates only a
+short-lived Agent enrollment token; the Agent runtime token is issued directly to the server and is
+never shown in the browser. Local PABX runtime updates should be applied through Agent jobs and
+recorded in tenant/global Activity Logs.
 
 ## Codecs
 
