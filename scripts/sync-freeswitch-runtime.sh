@@ -11,6 +11,15 @@ FS_CLI="${FREESWITCH_CLI:-fs_cli}"
 log() { printf '%s %s\n' "${LOG_PREFIX}" "$*"; }
 fail() { log "ERROR: $*" >&2; exit 1; }
 
+# Only reconcile dynamically managed gateway names. Other local/external Sofia
+# gateways are outside this runtime contract and must never be touched here.
+managed_gateway_names() {
+  local config_file="$1"
+
+  [[ -r "${config_file}" ]] || return 0
+  sed -nE 's/^[[:space:]]*<gateway name="(trunk-[0-9a-f]{32})".*/\1/p' "${config_file}" | sort -u
+}
+
 [[ "${EUID}" -eq 0 ]] || fail 'Run this script as root.'
 [[ -r "${API_BASE_FILE}" ]] || fail "Missing ${API_BASE_FILE}. Reinstall FreeSWITCH with its runtime command."
 [[ -r "${NODE_UUID_FILE}" ]] || fail "Missing ${NODE_UUID_FILE}. Reinstall FreeSWITCH with its runtime command."
@@ -24,7 +33,8 @@ api_token="$(tr -d '[:space:]' < "${API_TOKEN_FILE}")"
 [[ -n "${api_base}" && -n "${node_uuid}" && -n "${api_token}" ]] || fail 'PABX runtime identity is incomplete.'
 
 tmp_file="$(mktemp "${SOFIA_CONFIG}.tmp.XXXXXX")"
-trap 'rm -f "${tmp_file}"' EXIT
+previous_file="$(mktemp "${SOFIA_CONFIG}.previous.XXXXXX")"
+trap 'rm -f "${tmp_file}" "${previous_file}"' EXIT
 
 log 'Fetching canonical Sofia runtime configuration from the API.'
 curl --fail --silent --show-error --retry 2 --connect-timeout 10 --max-time 30 \
@@ -41,11 +51,28 @@ grep -Fq '<configuration name="sofia.conf"' "${tmp_file}" || fail 'API did not r
 grep -Fq '<profile name="external">' "${tmp_file}" || fail 'API Sofia configuration has no external profile.'
 
 install -d -m 0755 "$(dirname "${SOFIA_CONFIG}")"
+
+# `reloadxml` and `rescan` do not replace an existing Sofia gateway in memory.
+# Snapshot the current managed gateway names before replacing the XML, then
+# remove only those names so the following rescan materializes the canonical
+# API configuration (including changed host, credentials, or deleted trunks).
+if [[ -f "${SOFIA_CONFIG}" ]]; then
+  cp --preserve=mode "${SOFIA_CONFIG}" "${previous_file}"
+fi
+
+mapfile -t managed_gateways < <(managed_gateway_names "${previous_file}")
+for gateway_name in "${managed_gateways[@]}"; do
+  log "Replacing managed Sofia gateway: ${gateway_name}"
+  "${FS_CLI}" -x "sofia profile external killgw ${gateway_name}" >/dev/null || \
+    fail "Unable to remove managed Sofia gateway: ${gateway_name}"
+done
+
 chown root:freeswitch "${tmp_file}" 2>/dev/null || chown root:root "${tmp_file}"
 chmod 0640 "${tmp_file}"
 mv -f "${tmp_file}" "${SOFIA_CONFIG}"
 trap - EXIT
+rm -f "${previous_file}"
 
 "${FS_CLI}" -x 'reloadxml' >/dev/null
 "${FS_CLI}" -x 'sofia profile external rescan' >/dev/null
-log 'FreeSWITCH Sofia runtime synchronized and rescanned.'
+log 'FreeSWITCH Sofia runtime synchronized and reconciled.'
