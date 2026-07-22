@@ -30,6 +30,7 @@ contract. It can run on MNSCloud, customer, or partner infrastructure.
 - FreeSWITCH recordings: `/var/lib/freeswitch/recordings`
 - XML Curl config: `/etc/freeswitch/autoload_configs/xml_curl.conf.xml`
 - Event Socket config: `/etc/freeswitch/autoload_configs/event_socket.conf.xml`
+- Runtime sync script: `scripts/sync-freeswitch-runtime.sh`
 
 ## Install
 
@@ -75,3 +76,12 @@ shared Agent prerequisite contract with
 After FreeSWITCH is installed, the Agent derives and reports `voip.freeswitch.manage`.
 
 See `freeswitch.md` and `SECURITY.md` for details.
+
+## Runtime synchronization
+
+The MNSCloud Agent is the only control-plane executor for PABX runtime changes. When a trunk,
+route, dial plan, or dial-plan rule changes, the API queues an Agent job for the server assigned to
+that PABX. For FreeSWITCH, the Agent runs `scripts/sync-freeswitch-runtime.sh`, which retrieves the
+authorized canonical Sofia configuration, replaces `sofia.conf.xml` atomically, reloads XML, and
+rescans the external Sofia profile. The script does not store tenant routing data locally and does
+not log the runtime token.
