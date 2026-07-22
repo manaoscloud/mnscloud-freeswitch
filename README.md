@@ -93,6 +93,18 @@ cd /opt/mnscloud/mnscloud-freeswitch
 sudo ./scripts/update-latest-freeswitch.sh
 ```
 
+Older installations that predate the lifecycle scripts need this one-time
+bootstrap. It intentionally retrieves only the signed repository scripts; the
+helper then checks out the approved release tag and performs the full update.
+
+```bash
+cd /opt/mnscloud/mnscloud-freeswitch
+sudo git fetch origin main --tags --prune
+sudo git checkout origin/main -- scripts/update-freeswitch.sh scripts/update-latest-freeswitch.sh scripts/validate-freeswitch.sh scripts/rollback-freeswitch.sh
+sudo chmod +x scripts/{update-freeswitch,update-latest-freeswitch,validate-freeswitch,rollback-freeswitch}.sh
+sudo ./scripts/update-latest-freeswitch.sh
+```
+
 For a planned rollback, use an explicit known-good release tag. This is the
 only supported rollback path; do not use `git pull` as an operational update.
 

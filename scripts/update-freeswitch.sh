@@ -37,13 +37,38 @@ if [[ "$DRY_RUN" == '1' ]]; then
   exit 0
 fi
 
-git diff --quiet && git diff --cached --quiet || {
-  printf '[update-freeswitch] ERROR: local repository changes detected; commit or stash them before updating.\n' >&2
-  exit 1
+git fetch --prune origin main '+refs/tags/*:refs/tags/*'
+
+is_lifecycle_bootstrap_path() {
+  case "$1" in
+    scripts/update-freeswitch.sh|scripts/update-latest-freeswitch.sh|scripts/validate-freeswitch.sh|scripts/rollback-freeswitch.sh)
+      return 0
+      ;;
+    *) return 1 ;;
+  esac
 }
 
+assert_checkout_is_safe_to_update() {
+  local entry path
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    path="${entry:3}"
+    if is_lifecycle_bootstrap_path "$path" && \
+      git diff --quiet origin/main -- "$path" && \
+      git diff --cached --quiet origin/main -- "$path"; then
+      continue
+    fi
+    printf '[update-freeswitch] ERROR: local repository change detected: %s. Commit, stash, or discard it before updating.\n' "$path" >&2
+    return 1
+  done < <(git status --porcelain)
+}
+
+# Older installs bootstrap the lifecycle scripts directly from origin/main. Those
+# exact upstream files are safe to carry into the first tag checkout; every
+# other local modification remains a hard stop.
+assert_checkout_is_safe_to_update
+
 previous_ref="$(git rev-parse HEAD)"
-git fetch --prune origin main '+refs/tags/*:refs/tags/*'
 git rev-parse --verify --quiet "${REF}^{commit}" >/dev/null || {
   printf '[update-freeswitch] ERROR: ref not found: %s\n' "$REF" >&2
   exit 1
