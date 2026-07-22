@@ -19,6 +19,10 @@ contract. It can run on MNSCloud, customer, or partner infrastructure.
 - Product/runtime: `mnscloud-freeswitch`
 - Project directory: `/opt/mnscloud/mnscloud-freeswitch`
 - Installer: `scripts/install-freeswitch.sh`
+- Normal update: `scripts/update-latest-freeswitch.sh`
+- Explicit update: `scripts/update-freeswitch.sh --ref <release-tag>`
+- Validation: `scripts/validate-freeswitch.sh`
+- Rollback: `scripts/rollback-freeswitch.sh --ref <known-good-release-tag>`
 - Shared package installer: `mnscloud-runtime-kit`
 - Service: `freeswitch.service`
 - Local state prefix: `/etc/mnscloud/pabx`
@@ -76,6 +80,32 @@ shared Agent prerequisite contract with
 After FreeSWITCH is installed, the Agent derives and reports `voip.freeswitch.manage`.
 
 See `freeswitch.md` and `SECURITY.md` for details.
+
+## Update
+
+The normal operator path resolves the latest approved release at execution
+time. It retains the node identity and credentials in `/etc/mnscloud/pabx/`,
+reapplies the managed FreeSWITCH configuration, validates the service, and
+automatically restores the previous checkout if the update cannot validate.
+
+```bash
+cd /opt/mnscloud/mnscloud-freeswitch
+sudo ./scripts/update-latest-freeswitch.sh
+```
+
+For a planned rollback, use an explicit known-good release tag. This is the
+only supported rollback path; do not use `git pull` as an operational update.
+
+```bash
+cd /opt/mnscloud/mnscloud-freeswitch
+sudo ./scripts/rollback-freeswitch.sh --ref v0.1.4
+```
+
+Validate the installed runtime at any time:
+
+```bash
+sudo ./scripts/validate-freeswitch.sh
+```
 
 ## Runtime synchronization
 

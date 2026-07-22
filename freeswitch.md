@@ -138,12 +138,24 @@ routes, `NO_ANSWER` for groups/queues with no reachable members, and `NORMAL_TEM
 external/gateway failures. Voicemail or alternate forwarding should be modeled as an explicit route
 or future feature, not as an implicit engine fallback.
 
-## Install
+## Operational lifecycle
 
-Then run via the installer (as root):
+First installation uses the generated MNSCloud install command or, from an
+already cloned repository, `sudo bash scripts/install-freeswitch.sh`. Normal
+updates must resolve the current approved release instead of tracking a branch:
 
 ```bash
-./install.sh
+cd /opt/mnscloud/mnscloud-freeswitch
+sudo ./scripts/update-latest-freeswitch.sh
+sudo ./scripts/validate-freeswitch.sh
+```
+
+The update retains `/etc/mnscloud/pabx/`, applies the canonical configuration,
+validates FreeSWITCH and the external Sofia profile, and restores the previous
+commit when validation fails. To return intentionally to a known-good release:
+
+```bash
+sudo ./scripts/rollback-freeswitch.sh --ref <known-good-release-tag>
 ```
 
 ## Local installer state
