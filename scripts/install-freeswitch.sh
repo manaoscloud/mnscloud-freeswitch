@@ -1317,6 +1317,7 @@ main() {
   info "Enabling freeswitch service..."
   run "systemctl enable --now freeswitch"
   wait_for_freeswitch_cli
+  bash "${SCRIPT_DIR}/sync-freeswitch-runtime.sh"
   validate_media_codecs
   heartbeat || true
 
