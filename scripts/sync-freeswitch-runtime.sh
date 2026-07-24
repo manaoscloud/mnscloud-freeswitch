@@ -7,6 +7,7 @@ NODE_UUID_FILE='/etc/mnscloud/pabx/node.uuid'
 API_TOKEN_FILE='/etc/mnscloud/pabx/runtime.token'
 SOFIA_CONFIG='/etc/freeswitch/autoload_configs/sofia.conf.xml'
 FS_CLI="${FREESWITCH_CLI:-fs_cli}"
+RETIRED_GATEWAYS="${MNSCLOUD_FREESWITCH_RETIRE_GATEWAYS:-}"
 
 log() { printf '%s %s\n' "${LOG_PREFIX}" "$*"; }
 fail() { log "ERROR: $*" >&2; exit 1; }
@@ -71,21 +72,24 @@ for gateway_name in "${desired_managed_gateways[@]}"; do
   desired_gateway_set["${gateway_name}"]=1
 done
 
+# A registering gateway must finish its SIP unregistration before it can be
+# unloaded. Only the Agent's typed retirement job supplies this allow-list.
+declare -A retired_gateway_set=()
+if [[ -n "${RETIRED_GATEWAYS}" ]]; then
+  IFS=',' read -r -a retired_gateway_names <<<"${RETIRED_GATEWAYS}"
+  for gateway_name in "${retired_gateway_names[@]}"; do
+    [[ "${gateway_name}" =~ ^trunk-[0-9a-f]{32}$ ]] || \
+      fail "Invalid explicitly retired gateway name: ${gateway_name}"
+    retired_gateway_set["${gateway_name}"]=1
+  done
+fi
+
 for gateway_name in "${previous_managed_gateways[@]}"; do
   log "Replacing managed Sofia gateway: ${gateway_name}"
   if [[ -z "${desired_gateway_set[${gateway_name}]:-}" ]]; then
-    # `killgw` removes the local gateway, but an upstream provider may retain
-    # its registration until expiry. Ask Sofia to send REGISTER Expires: 0
-    # before unloading a gateway that was removed by the control plane.
-    unregister_output="$("${FS_CLI}" -x "sofia profile external unregister ${gateway_name}" 2>&1 || true)"
-    if grep -Eqi '(^|[[:space:]])-ERR|(^|[[:space:]])ERROR' <<<"${unregister_output}"; then
-      fail "Unable to request outbound SIP unregistration for ${gateway_name}: ${unregister_output}"
-    fi
-    if grep -Eqi 'invalid gateway' <<<"${unregister_output}"; then
-      log "Managed Sofia gateway is already absent: ${gateway_name}"
-    else
-      log "Outbound SIP unregistration requested: ${gateway_name}"
-    fi
+    [[ -n "${retired_gateway_set[${gateway_name}]:-}" ]] || \
+      fail "Refusing to unload removed gateway ${gateway_name} without Agent-confirmed retirement."
+    log "Retiring Agent-confirmed Sofia gateway: ${gateway_name}"
   fi
   "${FS_CLI}" -x "sofia profile external killgw ${gateway_name}" >/dev/null || \
     fail "Unable to remove managed Sofia gateway: ${gateway_name}"

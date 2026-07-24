@@ -126,10 +126,11 @@ route, dial plan, or dial-plan rule changes, the API queues an Agent job for the
 that PABX. For FreeSWITCH, the Agent runs `scripts/sync-freeswitch-runtime.sh`, which retrieves the
 authorized canonical Sofia configuration, replaces `sofia.conf.xml` atomically, reloads XML, and
 reconciles the managed external Sofia gateways before rescanning the profile. A control-plane trunk
-removal first runs the typed Agent teardown `sofia profile external unregister <gateway>` and then
-reconciles the runtime. The sync script retains the same explicit unregistration as a repair safeguard
-when an operator runs it manually and finds a managed gateway absent from the canonical configuration.
-Unchanged gateways are never de-registered by an unrelated synchronization. This reconciliation is required because a Sofia rescan
+removal is a typed Agent teardown: it requests `sofia profile external unregister <gateway>`, waits
+until Sofia reports `UNREGED`, then authorizes the synchronizer to unload that exact gateway. A normal
+sync refuses to unload a removed gateway by itself, preventing a local `killgw` from racing the SIP
+unregistration sent to the carrier. Unchanged gateways are never de-registered by an unrelated
+synchronization. This reconciliation is required because a Sofia rescan
 alone does not replace an already loaded gateway; host, credential, and removal changes must remove
 the old in-memory gateway before the canonical configuration is materialized again. Only
 MNSCloud-managed gateway names (`trunk-<uuid>`) are reconciled. The script does not store tenant
