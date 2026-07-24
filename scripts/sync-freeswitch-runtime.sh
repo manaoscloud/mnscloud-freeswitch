@@ -60,19 +60,32 @@ if [[ -f "${SOFIA_CONFIG}" ]]; then
   cp --preserve=mode "${SOFIA_CONFIG}" "${previous_file}"
 fi
 
-mapfile -t managed_gateways < <(managed_gateway_names "${previous_file}")
-for gateway_name in "${managed_gateways[@]}"; do
+# Only a gateway absent from the desired API document is a removal. Existing
+# gateways may be refreshed in place, but must not be unregistered during an
+# unrelated runtime reconciliation.
+mapfile -t previous_managed_gateways < <(managed_gateway_names "${previous_file}")
+mapfile -t desired_managed_gateways < <(managed_gateway_names "${tmp_file}")
+
+declare -A desired_gateway_set=()
+for gateway_name in "${desired_managed_gateways[@]}"; do
+  desired_gateway_set["${gateway_name}"]=1
+done
+
+for gateway_name in "${previous_managed_gateways[@]}"; do
   log "Replacing managed Sofia gateway: ${gateway_name}"
-  # `killgw` removes the local gateway, but an upstream provider may retain
-  # its registration until expiry. Ask Sofia to send REGISTER Expires: 0 first.
-  unregister_output="$("${FS_CLI}" -x "sofia profile external unregister ${gateway_name}" 2>&1 || true)"
-  if grep -Eqi '(^|[[:space:]])-ERR|(^|[[:space:]])ERROR' <<<"${unregister_output}"; then
-    fail "Unable to request outbound SIP unregistration for ${gateway_name}: ${unregister_output}"
-  fi
-  if grep -Eqi 'invalid gateway' <<<"${unregister_output}"; then
-    log "Managed Sofia gateway is already absent: ${gateway_name}"
-  else
-    log "Outbound SIP unregistration requested: ${gateway_name}"
+  if [[ -z "${desired_gateway_set[${gateway_name}]:-}" ]]; then
+    # `killgw` removes the local gateway, but an upstream provider may retain
+    # its registration until expiry. Ask Sofia to send REGISTER Expires: 0
+    # before unloading a gateway that was removed by the control plane.
+    unregister_output="$("${FS_CLI}" -x "sofia profile external unregister ${gateway_name}" 2>&1 || true)"
+    if grep -Eqi '(^|[[:space:]])-ERR|(^|[[:space:]])ERROR' <<<"${unregister_output}"; then
+      fail "Unable to request outbound SIP unregistration for ${gateway_name}: ${unregister_output}"
+    fi
+    if grep -Eqi 'invalid gateway' <<<"${unregister_output}"; then
+      log "Managed Sofia gateway is already absent: ${gateway_name}"
+    else
+      log "Outbound SIP unregistration requested: ${gateway_name}"
+    fi
   fi
   "${FS_CLI}" -x "sofia profile external killgw ${gateway_name}" >/dev/null || \
     fail "Unable to remove managed Sofia gateway: ${gateway_name}"

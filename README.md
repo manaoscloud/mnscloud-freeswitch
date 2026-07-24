@@ -125,9 +125,10 @@ The MNSCloud Agent is the only control-plane executor for PABX runtime changes. 
 route, dial plan, or dial-plan rule changes, the API queues an Agent job for the server assigned to
 that PABX. For FreeSWITCH, the Agent runs `scripts/sync-freeswitch-runtime.sh`, which retrieves the
 authorized canonical Sofia configuration, replaces `sofia.conf.xml` atomically, reloads XML, and
-reconciles the managed external Sofia gateways before rescanning the profile. It explicitly requests
-SIP de-registration before unloading each managed gateway, so an upstream provider does not retain a
-removed trunk until its registration expires. This reconciliation is required because a Sofia rescan
+reconciles the managed external Sofia gateways before rescanning the profile. When a managed gateway
+is absent from the new canonical configuration, it explicitly requests SIP de-registration before
+unloading it, so an upstream provider does not retain a removed trunk until its registration expires.
+Unchanged gateways are never de-registered by an unrelated synchronization. This reconciliation is required because a Sofia rescan
 alone does not replace an already loaded gateway; host, credential, and removal changes must remove
 the old in-memory gateway before the canonical configuration is materialized again. Only
 MNSCloud-managed gateway names (`trunk-<uuid>`) are reconciled. The script does not store tenant
