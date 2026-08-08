@@ -47,6 +47,7 @@ FREESWITCH_RUNTIME_KIT_REPO_URL="${FREESWITCH_RUNTIME_KIT_REPO_URL:-https://gith
 FREESWITCH_RUNTIME_KIT_CHANNEL="${FREESWITCH_RUNTIME_KIT_CHANNEL:-stable}"
 FREESWITCH_RUNTIME_KIT_REF="${FREESWITCH_RUNTIME_KIT_REF:-}"
 AGENT_VALIDATOR="/opt/mnscloud/mnscloud-agent/scripts/validate-agent.sh"
+AGENT_REPO_INSTALLER="/opt/mnscloud/mnscloud-agent/scripts/install-agent.sh"
 
 validate_mnscloud_agent() {
   if [[ "$DRY_RUN" == true ]]; then
@@ -56,6 +57,25 @@ validate_mnscloud_agent() {
   [[ -x "${AGENT_VALIDATOR}" ]] ||
     { err "mnscloud-agent validator not found at ${AGENT_VALIDATOR}. Update/reinstall the Agent before installing FreeSWITCH PABX."; return 1; }
   bash "${AGENT_VALIDATOR}" --require-active --require-enrolled
+}
+
+refresh_agent_capabilities() {
+  local install_label
+  install_label="$(hostname -f 2>/dev/null || hostname 2>/dev/null || printf 'mnscloud-agent')"
+
+  if [[ "$DRY_RUN" == true ]]; then
+    log DRY "refresh mnscloud-agent capabilities so it publishes mnscloud.freeswitch.update"
+    return 0
+  fi
+
+  if [[ -x "${AGENT_REPO_INSTALLER}" ]]; then
+    info "Refreshing mnscloud-agent capabilities after FreeSWITCH PABX runtime install."
+    bash "${AGENT_REPO_INSTALLER}" --api-base "${API_BASE}" --install-label "${install_label}"
+    return 0
+  fi
+
+  warn "mnscloud-agent source repo not found at ${AGENT_REPO_INSTALLER}; restarting service so runtime capability detection can refresh."
+  run "systemctl restart mnscloud-agent"
 }
 
 parse_cli_args() {
@@ -1320,6 +1340,7 @@ main() {
   bash "${SCRIPT_DIR}/sync-freeswitch-runtime.sh"
   validate_media_codecs
   heartbeat || true
+  refresh_agent_capabilities
 
   ok "FreeSWITCH installed and configured to consume XML through ${API_BASE}/api/v1/pabx/freeswitch"
   ok "Node UUID persisted at ${NODE_UUID_FILE}"
