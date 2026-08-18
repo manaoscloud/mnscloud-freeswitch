@@ -63,6 +63,11 @@ refresh_agent_capabilities() {
   local install_label
   install_label="$(hostname -f 2>/dev/null || hostname 2>/dev/null || printf 'mnscloud-agent')"
 
+  if [[ "${MNSCLOUD_RUNTIME_UPDATE_IN_PROGRESS:-}" == "1" ]]; then
+    info "Skipping mnscloud-agent capability refresh during Agent-managed FreeSWITCH runtime update."
+    return 0
+  fi
+
   if [[ "$DRY_RUN" == true ]]; then
     log DRY "refresh mnscloud-agent capabilities so it publishes mnscloud.freeswitch.update"
     return 0
