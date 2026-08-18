@@ -3,9 +3,9 @@
   "repository": "manaoscloud/mnscloud-freeswitch",
   "channels": {
     "stable": {
-      "version": "0.1.14",
-      "ref": "v0.1.14",
-      "releasedAt": "2026-08-08T18:26:12Z",
+      "version": "0.1.15",
+      "ref": "v0.1.15",
+      "releasedAt": "2026-08-18T00:06:50Z",
       "minimumVersion": "0.1.0"
     }
   }
