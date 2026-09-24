@@ -838,6 +838,11 @@ write_json_cdr_config() {
 "
 }
 
+control_config_fingerprint() {
+  cat /etc/freeswitch/autoload_configs/event_socket.conf.xml \
+    /etc/freeswitch/autoload_configs/acl.conf.xml 2>/dev/null | sha256sum | cut -d' ' -f1
+}
+
 write_event_socket_config() {
   local path="/etc/freeswitch/autoload_configs/event_socket.conf.xml"
   local dir
@@ -1020,9 +1025,9 @@ Option=3
 }
 
 validate_media_codecs() {
-  run "fs_cli -H 127.0.0.1 -P '${FS_CONTROL_PORT}' -p '${FS_CONTROL_SECRET}' -x 'show codecs' | grep -Ei 'G729|H264' || true"
-  run "fs_cli -H 127.0.0.1 -P '${FS_CONTROL_PORT}' -p '${FS_CONTROL_SECRET}' -x 'module_exists mod_bcg729' || true"
-  run "fs_cli -H 127.0.0.1 -P '${FS_CONTROL_PORT}' -p '${FS_CONTROL_SECRET}' -x 'module_exists mod_callcenter' || true"
+  run "fs_cli -H 127.0.0.1 -P '${FS_CONTROL_PORT}' -p \"\$(cat '${FS_CONTROL_SECRET_FILE}')\" -x 'show codecs' | grep -Ei 'G729|H264' || true"
+  run "fs_cli -H 127.0.0.1 -P '${FS_CONTROL_PORT}' -p \"\$(cat '${FS_CONTROL_SECRET_FILE}')\" -x 'module_exists mod_bcg729' || true"
+  run "fs_cli -H 127.0.0.1 -P '${FS_CONTROL_PORT}' -p \"\$(cat '${FS_CONTROL_SECRET_FILE}')\" -x 'module_exists mod_callcenter' || true"
 }
 
 wait_for_freeswitch_cli() {
@@ -1323,6 +1328,8 @@ main() {
   install_log_capture_start "install-freeswitch $(module_version_label) args: $(redacted_args "$@")"
   banner "freeswitch      PABX - FreeSWITCH 1.11.x (official repository)" "Debian 12"
   parse_cli_args "$@"
+  register_log_secret "${API_TOKEN}"
+  register_log_secret "${FS_DB_PASS}"
   validate_mnscloud_agent
   local app_security_script="${MNSCLOUD_MONOREPO_ROOT:-${PROJECT_ROOT}}/scripts/application-security.sh"
   [[ -f "${app_security_script}" ]] && run_script "${app_security_script}"
@@ -1332,6 +1339,8 @@ main() {
   ensure_node_uuid_file
   ensure_runtime_credential_file
   ensure_control_secret
+  register_log_secret "${API_TOKEN}"
+  register_log_secret "${FS_CONTROL_SECRET}"
   ensure_control_allowed_ips
 
   if [[ -z "${NODE_UUID}" ]]; then
@@ -1343,6 +1352,7 @@ main() {
   info "API base:  ${API_BASE}"
   wait_for_node_registration || true
   ensure_signalwire_repo_token_file
+  [[ -r "${SIGNALWIRE_REPO_TOKEN_FILE}" ]] && register_log_secret "$(tr -d '[:space:]' < "${SIGNALWIRE_REPO_TOKEN_FILE}")"
 
   install_pkgs
 
@@ -1372,6 +1382,9 @@ main() {
 
   write_xml_curl
   write_json_cdr_config
+  local control_config_before freeswitch_was_active=false
+  control_config_before="$(control_config_fingerprint)"
+  systemctl is-active --quiet freeswitch 2>/dev/null && freeswitch_was_active=true
   write_acl_config
   write_event_socket_config
   write_fs_cli_config
@@ -1382,6 +1395,13 @@ main() {
 
   info "Enabling freeswitch service..."
   run "systemctl enable --now freeswitch"
+  # enable --now does not restart a running FreeSWITCH: apply a changed Event Socket
+  # password/port/ACL (for example a rotated control secret) explicitly.
+  if $freeswitch_was_active && ! $DRY_RUN &&
+    [[ "${control_config_before}" != "$(control_config_fingerprint)" ]]; then
+    info "Event Socket configuration changed; restarting freeswitch to apply it."
+    run "systemctl restart freeswitch"
+  fi
   wait_for_freeswitch_cli
   bash "${SCRIPT_DIR}/sync-freeswitch-runtime.sh"
   validate_media_codecs

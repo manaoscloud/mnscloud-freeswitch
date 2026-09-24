@@ -25,6 +25,22 @@ _ts() { date +"%Y-%m-%d %H:%M:%S"; }
 MNSCLOUD_LOG_CAPTURED="${MNSCLOUD_LOG_CAPTURED:-0}"
 MNSCLOUD_LAST_ERR=""
 MNSCLOUD_LAST_ERR_LOCKED=0
+MNSCLOUD_LOG_SECRETS=()
+
+# Secrets registered here are masked in every RUN/failure line written to the log.
+register_log_secret() {
+  local value="${1:-}"
+  [[ ${#value} -ge 6 ]] || return 0
+  MNSCLOUD_LOG_SECRETS+=("${value}")
+}
+
+redact_log_text() {
+  local text="$1" secret
+  for secret in ${MNSCLOUD_LOG_SECRETS[@]+"${MNSCLOUD_LOG_SECRETS[@]}"}; do
+    text="${text//"${secret}"/***}"
+  done
+  printf '%s' "${text}"
+}
 
 log_raw() {
   # With session capture active, the stdout line already reaches LOG_FILE.
@@ -125,12 +141,14 @@ ensure_local_hostname_hosts() {
 run() {
   local cmd="$*"
 
+  local shown
+  shown="$(redact_log_text "$cmd")"
   if $DRY_RUN; then
-    log DRY "$cmd"
+    log DRY "$shown"
     return 0
   fi
 
-  info "RUN: $cmd"
+  info "RUN: $shown"
   MNSCLOUD_LAST_ERR_LOCKED=0
   local started rc
   started="$(date +%s)"
@@ -145,8 +163,8 @@ run() {
   set -e
 
   if [[ "$rc" -ne 0 ]]; then
-    err "Failed (exit=${rc}, $(( $(date +%s) - started ))s): $cmd"
-    MNSCLOUD_LAST_ERR="exit=${rc}: ${cmd}"
+    err "Failed (exit=${rc}, $(( $(date +%s) - started ))s): $shown"
+    MNSCLOUD_LAST_ERR="exit=${rc}: ${shown}"
     MNSCLOUD_LAST_ERR_LOCKED=1
     return "$rc"
   fi
