@@ -14,3 +14,7 @@ jobs:
         uses: actions/checkout@v6
       - name: Shell syntax check
         run: bash -n scripts/*.sh
+      - name: Library and test syntax check
+        run: bash -n scripts/lib/*.sh tests/*.sh
+      - name: Installer log capture contract
+        run: bash tests/install-log-capture.sh

@@ -81,6 +81,21 @@ After FreeSWITCH is installed, the Agent derives and reports `voip.freeswitch.ma
 
 See `freeswitch.md` and `SECURITY.md` for details.
 
+### Install log and diagnostics
+
+Every installer run appends its full session to `/var/log/mnscloud-install.log` (mode `0640`):
+a `START` line with the module version, argument names (never values), host context (OS, kernel,
+CPUs, RAM, swap, disk), every command with its complete stdout/stderr, and an `END OK` or
+`END FAILED` line with elapsed time. Nothing is filtered or sent to `/dev/null`.
+
+On any failure the log records the failing command plus diagnostics: installed `freeswitch*`
+packages, the tail of `/var/log/apt/term.log`, `freeswitch.service` status, `free`, `df`, kernel
+OOM/kill events since the install started, and failed systemd units. The install ends by running
+`scripts/validate-freeswitch.sh`; because the external Sofia profile depends on the API runtime
+sync, a failed final validation is logged as a warning instead of aborting.
+
+To review a failed install: `grep -nE 'ERROR|END ' /var/log/mnscloud-install.log | tail`.
+
 ## Update
 
 The normal operator path resolves the latest approved release at execution

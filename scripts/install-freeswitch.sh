@@ -193,9 +193,11 @@ prompt_secret_value() {
   local label="$1" value=""
   if [[ -r /dev/tty && -w /dev/tty ]]; then
     printf "%s: " "${label}" >/dev/tty
-    IFS= read -r value </dev/tty
+    IFS= read -r -s value </dev/tty
+    printf "\n" >/dev/tty
   elif [[ -t 0 ]]; then
-    read -r -p "${label}: " value
+    read -r -s -p "${label}: " value
+    printf "\n" >&2
   fi
   printf "%s" "$value"
 }
@@ -1278,9 +1280,48 @@ wait_for_node_registration() {
   done
 }
 
+module_version_label() {
+  local version sha
+  version="$(cat "${PROJECT_ROOT}/VERSION" 2>/dev/null || echo unknown)"
+  sha="$(git -C "${PROJECT_ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  printf 'mnscloud-freeswitch %s (%s)' "${version}" "${sha}"
+}
+
+# Argument names only: values such as --runtime-token are secrets.
+redacted_args() {
+  local arg out=()
+  for arg in "$@"; do
+    [[ "${arg}" == --* ]] && out+=("${arg}")
+  done
+  printf '%s' "${out[*]:-(none)}"
+}
+
+install_failure_diagnostics() {
+  echo "----- diagnostics: FreeSWITCH packages and service -----"
+  dpkg-query -W -f='${Package} ${Version} ${db:Status-Abbrev}\n' 'freeswitch*' 2>/dev/null | head -n 40 || true
+  tail -n 40 /var/log/apt/term.log 2>/dev/null || true
+  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files freeswitch.service >/dev/null 2>&1; then
+    systemctl status freeswitch --no-pager -n 30 2>&1 || true
+  fi
+}
+
+# The external Sofia profile comes from the API runtime sync, so a host whose
+# Node UUID is not registered yet fails this check without a broken install.
+run_final_validation() {
+  if $DRY_RUN; then
+    log DRY "bash '${SCRIPT_DIR}/validate-freeswitch.sh'"
+    return 0
+  fi
+  if run "bash '${SCRIPT_DIR}/validate-freeswitch.sh'"; then
+    return 0
+  fi
+  warn "Final FreeSWITCH validation failed; see the validate-freeswitch output above."
+}
+
 main() {
-  banner "freeswitch      PABX - FreeSWITCH 1.11.x (official repository)" "Debian 12"
   require_root
+  install_log_capture_start "install-freeswitch $(module_version_label) args: $(redacted_args "$@")"
+  banner "freeswitch      PABX - FreeSWITCH 1.11.x (official repository)" "Debian 12"
   parse_cli_args "$@"
   validate_mnscloud_agent
   local app_security_script="${MNSCLOUD_MONOREPO_ROOT:-${PROJECT_ROOT}}/scripts/application-security.sh"
@@ -1344,7 +1385,8 @@ main() {
   wait_for_freeswitch_cli
   bash "${SCRIPT_DIR}/sync-freeswitch-runtime.sh"
   validate_media_codecs
-  heartbeat || true
+  run_final_validation
+  heartbeat || warn "Final heartbeat to ${API_BASE} failed; see the heartbeat lines above."
   refresh_agent_capabilities
 
   ok "FreeSWITCH installed and configured to consume XML through ${API_BASE}/api/v1/pabx/freeswitch"
