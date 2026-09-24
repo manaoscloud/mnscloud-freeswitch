@@ -96,6 +96,11 @@ sync, a failed final validation is logged as a warning instead of aborting.
 
 To review a failed install: `grep -nE 'ERROR|END ' /var/log/mnscloud-install.log | tail`.
 
+Right after boot, `unattended-upgrades`/apt-daily often hold the dpkg or apt lists lock. The
+installer waits for those locks before any apt/dpkg command (up to 600s, override with
+`MNSCLOUD_APT_LOCK_TIMEOUT`) and logs progress every 30s, instead of failing with exit 100.
+Packages installed through `mnscloud-runtime-kit` use the same wait.
+
 Runtime secrets (runtime token, Event Socket password, database password, SignalWire token) are
 registered with the installer log and masked as `***` in every `RUN:`/failure line; `fs_cli`
 checks read the Event Socket password from `/etc/mnscloud/pabx/freeswitch-esl.secret` instead of

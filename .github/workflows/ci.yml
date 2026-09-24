@@ -18,3 +18,5 @@ jobs:
         run: bash -n scripts/lib/*.sh tests/*.sh
       - name: Installer log capture contract
         run: bash tests/install-log-capture.sh
+      - name: apt/dpkg lock wait contract
+        run: bash tests/apt-lock-wait.sh
