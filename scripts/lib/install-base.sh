@@ -20,19 +20,31 @@ LOG_FILE="${LOG_FILE:-$DEFAULT_LOG_FILE}"
 
 _ts() { date +"%Y-%m-%d %H:%M:%S"; }
 
-log_raw() { printf "[%s] %s %s\n" "$(_ts)" "$1" "$2" >> "$LOG_FILE" || true; }
+# Set to 1 by install_log_capture_start once stdout/stderr of the whole
+# session are mirrored into LOG_FILE.
+MNSCLOUD_LOG_CAPTURED="${MNSCLOUD_LOG_CAPTURED:-0}"
+MNSCLOUD_LAST_ERR=""
+MNSCLOUD_LAST_ERR_LOCKED=0
+
+log_raw() {
+  # With session capture active, the stdout line already reaches LOG_FILE.
+  [[ "${MNSCLOUD_LOG_CAPTURED}" == "1" ]] && return 0
+  printf "[%s] %s %s\n" "$(_ts)" "$1" "$2" >> "$LOG_FILE" || true
+}
 
 log() {
   local lvl="$1"; shift
-  local msg="$*"
+  local msg="$*" stamp=""
+
+  [[ "${MNSCLOUD_LOG_CAPTURED}" == "1" ]] && stamp="[$(_ts)] "
 
   case "$lvl" in
-    INFO) echo -e "${LOG_PREFIX} \033[1;32mINFO\033[0m  ${msg}" ;;
-    WARN) echo -e "${LOG_PREFIX} \033[1;33mWARN\033[0m  ${msg}" ;;
-    ERROR) echo -e "${LOG_PREFIX} \033[1;31mERROR\033[0m ${msg}" ;;
-    OK) echo -e "${LOG_PREFIX} \033[1;36mOK\033[0m    ${msg}" ;;
-    DRY) echo -e "${LOG_PREFIX} \033[1;35mDRY-RUN\033[0m ${msg}" ;;
-    *) echo -e "${LOG_PREFIX} ${msg}" ;;
+    INFO) echo -e "${stamp}${LOG_PREFIX} \033[1;32mINFO\033[0m  ${msg}" ;;
+    WARN) echo -e "${stamp}${LOG_PREFIX} \033[1;33mWARN\033[0m  ${msg}" ;;
+    ERROR) echo -e "${stamp}${LOG_PREFIX} \033[1;31mERROR\033[0m ${msg}" ;;
+    OK) echo -e "${stamp}${LOG_PREFIX} \033[1;36mOK\033[0m    ${msg}" ;;
+    DRY) echo -e "${stamp}${LOG_PREFIX} \033[1;35mDRY-RUN\033[0m ${msg}" ;;
+    *) echo -e "${stamp}${LOG_PREFIX} ${lvl} ${msg}" ;;
   esac
 
   log_raw "$lvl" "$msg"
@@ -119,16 +131,119 @@ run() {
   fi
 
   info "RUN: $cmd"
+  MNSCLOUD_LAST_ERR_LOCKED=0
+  local started rc
+  started="$(date +%s)"
   set +e
-  bash -c "$cmd" 2>&1 | tee -a "$LOG_FILE"
-  local rc="${PIPESTATUS[0]}"
+  if [[ "${MNSCLOUD_LOG_CAPTURED}" == "1" ]]; then
+    bash -c "$cmd" 2>&1
+    rc=$?
+  else
+    bash -c "$cmd" 2>&1 | tee -a "$LOG_FILE"
+    rc="${PIPESTATUS[0]}"
+  fi
   set -e
 
   if [[ "$rc" -ne 0 ]]; then
-    err "Failed (exit=${rc}): $cmd"
+    err "Failed (exit=${rc}, $(( $(date +%s) - started ))s): $cmd"
+    MNSCLOUD_LAST_ERR="exit=${rc}: ${cmd}"
+    MNSCLOUD_LAST_ERR_LOCKED=1
     return "$rc"
   fi
   return 0
+}
+
+# ==========================================================
+# Full session logging
+#   Mirrors every stdout/stderr line of the installer (including child
+#   builds) into LOG_FILE, records host context, and on failure writes the
+#   failing command plus resource diagnostics so nothing stays hidden.
+#   Installers may define install_failure_diagnostics() for module-specific
+#   evidence; it runs before the generic diagnostics.
+# ==========================================================
+MNSCLOUD_INSTALL_STARTED_AT=""
+MNSCLOUD_LOG_TEE_PID=""
+
+install_log_capture_start() {
+  local label="${1:-installer}"
+  MNSCLOUD_INSTALL_STARTED_AT="$(date +%s)"
+
+  if [[ "${MNSCLOUD_LOG_CAPTURED}" != "1" ]]; then
+    mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
+    touch "$LOG_FILE" && chmod 0640 "$LOG_FILE" 2>/dev/null || true
+    # Terminal keeps colors; the log file gets the same lines without ANSI codes.
+    exec > >(tee >(sed -u -E 's/\x1B\[[0-9;]*[A-Za-z]//g' >>"$LOG_FILE")) 2>&1
+    MNSCLOUD_LOG_TEE_PID=$!
+    MNSCLOUD_LOG_CAPTURED=1
+  fi
+
+  set -E
+  # run() records its own failing command; other failures keep file line/function.
+  trap '[[ "${MNSCLOUD_LAST_ERR_LOCKED}" == "1" || "${BASH_COMMAND}" == return* ]] || MNSCLOUD_LAST_ERR="line ${LINENO} in ${FUNCNAME[0]:-main}: ${BASH_COMMAND}"' ERR
+  trap '_install_log_finish $?' EXIT
+
+  echo "=================================================================="
+  log START "${label} (pid $$)"
+  install_log_host_context
+  echo "=================================================================="
+}
+
+install_log_host_context() {
+  local mem_total mem_avail swap_total
+  mem_total="$(awk '/^MemTotal:/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo '?')"
+  mem_avail="$(awk '/^MemAvailable:/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo '?')"
+  swap_total="$(awk '/^SwapTotal:/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo '?')"
+  info "Context: host=$(hostname -f 2>/dev/null || hostname) os=\"$(os_label)\" kernel=$(uname -r) arch=$(uname -m)"
+  info "Context: cpus=$(nproc 2>/dev/null || echo '?') mem_total=${mem_total}MB mem_available=${mem_avail}MB swap=${swap_total}MB bash=${BASH_VERSION}"
+  info "Context: disk $(df -hP / 2>/dev/null | awk 'NR==2 {print $1" size="$2" used="$3" avail="$4" mounted="$6}')"
+  info "Context: mode=$( $DRY_RUN && echo DRY-RUN || echo APPLY ) log=${LOG_FILE}"
+}
+
+install_log_generic_diagnostics() {
+  echo "----- diagnostics: resources -----"
+  free -m 2>&1 || true
+  df -hP 2>&1 || true
+  uptime 2>&1 || true
+  echo "----- diagnostics: kernel OOM / kill events since install start -----"
+  if command -v journalctl >/dev/null 2>&1 && [[ -n "${MNSCLOUD_INSTALL_STARTED_AT}" ]]; then
+    journalctl -k --no-pager --since "@${MNSCLOUD_INSTALL_STARTED_AT}" 2>&1 |
+      grep -iE 'out of memory|oom|killed process|segfault|i/o error' | tail -n 30 || echo "(none)"
+  else
+    dmesg 2>&1 | grep -iE 'out of memory|oom|killed process|segfault|i/o error' | tail -n 30 || echo "(none)"
+  fi
+  echo "----- diagnostics: failed systemd units -----"
+  systemctl --failed --no-legend --no-pager 2>&1 || true
+}
+
+_install_log_finish() {
+  local rc="$1" elapsed=0
+  trap - EXIT ERR
+  set +e
+  [[ -n "${MNSCLOUD_INSTALL_STARTED_AT}" ]] && elapsed=$(( $(date +%s) - MNSCLOUD_INSTALL_STARTED_AT ))
+
+  if [[ "$rc" -ne 0 ]]; then
+    err "Installer failed (exit=${rc}) after ${elapsed}s."
+    [[ -n "${MNSCLOUD_LAST_ERR}" ]] && err "Last failed command: ${MNSCLOUD_LAST_ERR}"
+    if declare -F install_failure_diagnostics >/dev/null; then
+      install_failure_diagnostics
+    fi
+    install_log_generic_diagnostics
+    log END "FAILED exit=${rc} elapsed=${elapsed}s log=${LOG_FILE}"
+  else
+    log END "OK elapsed=${elapsed}s log=${LOG_FILE}"
+  fi
+
+  # Flush the tee pipeline before the process exits so the log is complete.
+  if [[ -n "${MNSCLOUD_LOG_TEE_PID}" ]]; then
+    # Bounded wait: a leftover child holding stdout must not hang the exit.
+    exec 1>&- 2>&-
+    local waited=0
+    while kill -0 "${MNSCLOUD_LOG_TEE_PID}" 2>/dev/null && (( waited < 50 )); do
+      sleep 0.1
+      waited=$(( waited + 1 ))
+    done
+  fi
+  exit "$rc"
 }
 
 run_script() {
