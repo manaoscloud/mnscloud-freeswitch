@@ -138,6 +138,42 @@ ensure_local_hostname_hosts() {
   ok "Local hostname ensured in ${hosts_file}: ${aliases[*]}"
 }
 
+# ----------------------------------------------------------
+# apt/dpkg locks. Right after boot unattended-upgrades/apt-daily often hold the dpkg
+# frontend or apt lists lock and plain apt-get fails with exit 100. run() waits for
+# those locks before any apt/dpkg command and exports a transient APT_CONFIG with
+# DPkg::Lock::Timeout (apt-get update ignores it, hence the explicit wait). /etc/apt
+# is never changed. Override the 600s limit with MNSCLOUD_APT_LOCK_TIMEOUT.
+# ----------------------------------------------------------
+MNSCLOUD_APT_LOCK_TIMEOUT="${MNSCLOUD_APT_LOCK_TIMEOUT:-600}"
+MNSCLOUD_APT_LOCK_PATTERN='^/var/lib/(dpkg/lock|dpkg/lock-frontend|apt/lists/lock|apt/archives/lock)$'
+
+apt_locks_held() {
+  command -v lslocks >/dev/null 2>&1 || return 1
+  lslocks --noheadings --output PATH 2>/dev/null | grep -qE "$MNSCLOUD_APT_LOCK_PATTERN"
+}
+
+apt_prepare_for_lock() {
+  local config waited=0
+  [[ "$MNSCLOUD_APT_LOCK_TIMEOUT" =~ ^[0-9]+$ ]] || MNSCLOUD_APT_LOCK_TIMEOUT=600
+  if [[ -z "${APT_CONFIG:-}" ]] && config="$(mktemp "${TMPDIR:-/tmp}/mnscloud-apt-lock.XXXXXX")"; then
+    printf 'DPkg::Lock::Timeout "%s";\n' "$MNSCLOUD_APT_LOCK_TIMEOUT" >"$config"
+    chmod 0644 "$config"
+    export APT_CONFIG="$config"
+  fi
+  while apt_locks_held; do
+    if (( waited >= MNSCLOUD_APT_LOCK_TIMEOUT )); then
+      warn "apt/dpkg lock still held after ${waited}s; continuing so apt-get reports the holder."
+      return 0
+    fi
+    if (( waited % 30 == 0 )); then
+      info "Waiting for another apt/dpkg process (for example unattended-upgrades) to release its lock (${waited}s/${MNSCLOUD_APT_LOCK_TIMEOUT}s)."
+    fi
+    sleep 5
+    waited=$((waited + 5))
+  done
+}
+
 run() {
   local cmd="$*"
 
@@ -149,6 +185,9 @@ run() {
   fi
 
   info "RUN: $shown"
+  if [[ "$cmd" =~ (^|[^[:alnum:]_./-])(apt-get|apt|dpkg)[[:space:]] ]]; then
+    apt_prepare_for_lock
+  fi
   MNSCLOUD_LAST_ERR_LOCKED=0
   local started rc
   started="$(date +%s)"
