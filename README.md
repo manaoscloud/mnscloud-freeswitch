@@ -96,6 +96,16 @@ sync, a failed final validation is logged as a warning instead of aborting.
 
 To review a failed install: `grep -nE 'ERROR|END ' /var/log/mnscloud-install.log | tail`.
 
+Runtime secrets (runtime token, Event Socket password, database password, SignalWire token) are
+registered with the installer log and masked as `***` in every `RUN:`/failure line; `fs_cli`
+checks read the Event Socket password from `/etc/mnscloud/pabx/freeswitch-esl.secret` instead of
+passing it inline.
+
+When the Event Socket or ACL configuration changes on a host where FreeSWITCH is already running
+(for example after rotating the control secret by removing that file before an update), the
+installer restarts `freeswitch` so the new settings take effect; `systemctl enable --now` alone
+does not restart a running service.
+
 ## Update
 
 The normal operator path resolves the latest approved release at execution

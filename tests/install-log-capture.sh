@@ -16,6 +16,9 @@ LOG_PREFIX="[fixture]"
 source "${REPO}/scripts/lib/install-base.sh"
 install_failure_diagnostics() { echo "module-diagnostics-marker"; }
 install_log_capture_start "fixture"
+register_log_secret "fixture-secret-value"
+register_log_secret "abc"
+run ": fixture-secret-value abc"
 echo "plain-stdout-marker"
 run "echo child-stdout-marker; echo child-stderr-marker >&2"
 ok "success-marker"
@@ -39,6 +42,9 @@ done
 [[ "$(grep -cx "child-stdout-marker" "${WORK}/ok.log")" == "1" ]] || fail "command output duplicated in log"
 ! grep -q $'\x1b' "${WORK}/ok.log" || fail "ANSI escape codes leaked into log"
 [[ "$(stat -c %a "${WORK}/ok.log")" == "640" ]] || fail "log file mode is not 0640"
+
+reject "${WORK}/ok.log" "fixture-secret-value"
+expect "${WORK}/ok.log" "RUN: : *** abc"
 
 # Failure path
 set +e
