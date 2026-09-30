@@ -6,6 +6,7 @@ API_BASE_FILE='/etc/mnscloud/pabx/api.base'
 NODE_UUID_FILE='/etc/mnscloud/pabx/node.uuid'
 API_TOKEN_FILE='/etc/mnscloud/pabx/runtime.token'
 SOFIA_CONFIG='/etc/freeswitch/autoload_configs/sofia.conf.xml'
+ACL_CONFIG='/etc/freeswitch/autoload_configs/acl.conf.xml'
 FS_CLI="${FREESWITCH_CLI:-fs_cli}"
 RETIRED_GATEWAYS="${MNSCLOUD_FREESWITCH_RETIRE_GATEWAYS:-}"
 
@@ -101,6 +102,31 @@ mv -f "${tmp_file}" "${SOFIA_CONFIG}"
 trap - EXIT
 rm -f "${previous_file}"
 
+log 'Fetching canonical ACL runtime configuration from the API.'
+acl_tmp_file="$(mktemp "${ACL_CONFIG}.tmp.XXXXXX")"
+if curl --fail --silent --show-error --retry 2 --connect-timeout 10 --max-time 30 \
+  --header 'Content-Type: application/x-www-form-urlencoded' \
+  --user "mnscloud:${api_token}" \
+  --request POST "${api_base%/}/api/v1/pabx/freeswitch" \
+  --data-urlencode "node_uuid=${node_uuid}" \
+  --data-urlencode 'section=configuration' \
+  --data-urlencode 'key_value=acl.conf' \
+  --data-urlencode 'materialize=1' \
+  --output "${acl_tmp_file}"; then
+  if grep -Fq '<configuration name="acl.conf"' "${acl_tmp_file}"; then
+    chown root:freeswitch "${acl_tmp_file}" 2>/dev/null || chown root:root "${acl_tmp_file}"
+    chmod 0640 "${acl_tmp_file}"
+    mv -f "${acl_tmp_file}" "${ACL_CONFIG}"
+    log 'ACL configuration synchronized.'
+  else
+    rm -f "${acl_tmp_file}"
+  fi
+else
+  rm -f "${acl_tmp_file}"
+fi
+
 "${FS_CLI}" -x 'reloadxml' >/dev/null
+"${FS_CLI}" -x 'reloadacl' >/dev/null
 "${FS_CLI}" -x 'sofia profile external rescan' >/dev/null
-log 'FreeSWITCH Sofia runtime synchronized and reconciled.'
+"${FS_CLI}" -x 'sofia profile internal rescan' >/dev/null
+log 'FreeSWITCH Sofia and ACL runtime synchronized and reconciled.'
