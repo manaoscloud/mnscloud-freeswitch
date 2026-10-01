@@ -19,7 +19,9 @@ managed_gateway_names() {
   local config_file="$1"
 
   [[ -r "${config_file}" ]] || return 0
-  sed -nE 's/^[[:space:]]*<gateway name="(trunk-[0-9a-f]{32})".*/\1/p' "${config_file}" | sort -u
+  grep -oE '<gateway name="trunk-[0-9a-f]{32}"' "${config_file}" 2>/dev/null \
+    | sed -E 's/<gateway name="([^"]+)"/\1/' \
+    | sort -u || true
 }
 
 [[ "${EUID}" -eq 0 ]] || fail 'Run this script as root.'
