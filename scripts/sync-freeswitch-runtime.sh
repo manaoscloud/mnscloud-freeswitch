@@ -131,4 +131,7 @@ fi
 "${FS_CLI}" -x 'reloadacl' >/dev/null
 "${FS_CLI}" -x 'sofia profile external rescan' >/dev/null
 "${FS_CLI}" -x 'sofia profile internal rescan' >/dev/null
+if grep -Fq '<profile name="internal-ipv6">' "${SOFIA_CONFIG}"; then
+  "${FS_CLI}" -x 'sofia profile internal-ipv6 rescan' >/dev/null 2>&1 || "${FS_CLI}" -x 'sofia profile internal-ipv6 start' >/dev/null 2>&1 || true
+fi
 log 'FreeSWITCH Sofia and ACL runtime synchronized and reconciled.'
