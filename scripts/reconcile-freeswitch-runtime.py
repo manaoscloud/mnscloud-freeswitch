@@ -65,8 +65,14 @@ def atomic_write(path, data, mode=0o640):
 
 
 class Reconciler:
-    def __init__(self, directory, state, cli):
-        self.directory, self.state, self.cli = directory, state, cli
+    def __init__(self, directory, state, cli, deadline=None):
+        self.directory, self.state = directory, state
+        deadline = time.monotonic() + 150 if deadline is None else deadline
+        def bounded_cli(command, **kwargs):
+            if time.monotonic() >= deadline:
+                raise RuntimeError('Reconciliation deadline exceeded; next attempt will resume')
+            return cli(command, **kwargs)
+        self.cli = bounded_cli
 
     def status(self, name):
         output = self.cli('sofia status gateway ' + name, missing=True)
@@ -163,6 +169,7 @@ class Reconciler:
 
 
 def main():
+    deadline = time.monotonic() + 150
     if os.geteuid() != 0:
         raise RuntimeError('Run as root')
     state = Path('/var/lib/mnscloud/freeswitch-reconcile')
@@ -201,7 +208,7 @@ def main():
                 raise RuntimeError('Gateway unavailable')
             return output
         # Fetch and validate both before the first runtime mutation.
-        result = Reconciler(Path('/etc/freeswitch/autoload_configs'), state, cli).apply(
+        result = Reconciler(Path('/etc/freeswitch/autoload_configs'), state, cli, deadline).apply(
             fetch('sofia.conf'), fetch('acl.conf'))
         print(json.dumps(result))
 
