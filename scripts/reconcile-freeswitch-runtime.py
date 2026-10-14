@@ -16,11 +16,11 @@ import xml.etree.ElementTree as ET
 NAME = re.compile(r"trunk-[0-9a-f]{32}\Z")
 
 
-def gateways(data):
+def gateways(data, require_external=True):
     root = ET.fromstring(data)
     if root.tag != 'configuration' or root.get('name') != 'sofia.conf':
         raise ValueError('Invalid Sofia configuration')
-    if root.find("./profiles/profile[@name='external']") is None:
+    if require_external and root.find("./profiles/profile[@name='external']") is None:
         raise ValueError('External profile is missing')
     result = {}
     for node in root.findall('./profiles/profile/gateways/gateway'):
@@ -116,7 +116,10 @@ class Reconciler:
             raise ValueError('Invalid retirement authorization')
         target = self.directory / 'sofia.conf.xml'
         previous = target.read_bytes() if target.exists() else None
-        old = gateways(previous)[1] if previous else {}
+        # A first installation has only the packaged profile include. The API
+        # snapshot still requires an explicit external profile; loaded gateways
+        # remain subject to the same authoritative retirement checks below.
+        old = gateways(previous, require_external=False)[1] if previous else {}
         # Runtime inventory is authoritative for loaded gateways; a crash may leave
         # the disk and process at different phases. Do not inspect SIP credentials.
         output = self.cli('sofia status gateways')

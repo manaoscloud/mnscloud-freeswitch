@@ -3,6 +3,7 @@
 import importlib.util
 from pathlib import Path
 import tempfile
+import subprocess
 import unittest
 
 spec = importlib.util.spec_from_file_location('reconcile', Path(__file__).resolve().parents[1] / 'scripts/reconcile-freeswitch-runtime.py')
@@ -60,6 +61,44 @@ class TestReconcile(unittest.TestCase):
         self.assertTrue(result['configurationApplied'])
         self.assertTrue(all(r['remoteRemoval'] == 'unconfirmed' for r in result['retirements']))
         self.assertLess(self.calls.index('sofia profile external unregister ' + A), self.calls.index('sofia profile external killgw ' + A))
+
+    def test_initial_install_with_profile_include(self):
+        bootstrap = b'<configuration name="sofia.conf"><profiles><X-PRE-PROCESS cmd="include" data="../sip_profiles/*.xml"/></profiles></configuration>'
+        (self.path / 'sofia.conf.xml').write_bytes(bootstrap)
+        result = self.reconciler.apply(xml([A]), ACL)
+        self.assertTrue(result['configurationApplied'])
+        self.assertEqual(self.loaded, {A: 'REGED'})
+
+    def test_installer_preserves_snapshot_and_bootstraps_missing_file(self):
+        installer = (Path(__file__).resolve().parents[1] / 'scripts/install-freeswitch.sh').read_text()
+        function = installer.split('write_sofia_config() {', 1)[1].split('\nwrite_internal_profile()', 1)[0]
+        path = self.path / 'sofia.conf.xml'
+        function = ('write_sofia_config() {' + function).replace('/etc/freeswitch/autoload_configs/sofia.conf.xml', str(path))
+        script = 'set -e; backup_once() { :; }; write_file() { printf "%s" "$2" > "$1"; }; run() { eval "$1"; };\n' + function + '\nwrite_sofia_config'
+        self.previous([A])
+        before = path.read_bytes()
+        subprocess.run(['bash', '-c', script], check=True)
+        self.assertEqual(path.read_bytes(), before)
+        path.unlink()
+        subprocess.run(['bash', '-c', script], check=True)
+        self.assertIn(b'X-PRE-PROCESS', path.read_bytes())
+        self.reconciler.apply(xml([A]), ACL)
+        self.assertEqual(self.loaded, {A: 'REGED'})
+
+    def test_bootstrap_does_not_relax_desired_validation(self):
+        bootstrap = b'<configuration name="sofia.conf"><profiles/></configuration>'
+        (self.path / 'sofia.conf.xml').write_bytes(bootstrap)
+        with self.assertRaises(ValueError):
+            self.reconciler.apply(bootstrap, ACL)
+        self.assertEqual(self.calls, [])
+
+    def test_bootstrap_loaded_gateway_still_requires_authority(self):
+        (self.path / 'sofia.conf.xml').write_bytes(b'<configuration name="sofia.conf"><profiles/></configuration>')
+        self.loaded[A] = 'REGED'
+        with self.assertRaises(RuntimeError):
+            self.reconciler.apply(xml([B]), ACL)
+        self.assertEqual(self.loaded, {A: 'REGED'})
+        self.assertFalse(any('killgw' in c or 'unregister' in c for c in self.calls))
 
     def test_absent_retired_gateways_are_idempotent(self):
         self.previous([A, B], loaded=False)
