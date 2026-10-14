@@ -156,12 +156,18 @@ route, dial plan, or dial-plan rule changes, the API queues an Agent job for the
 that PABX. For FreeSWITCH, the Agent runs `scripts/sync-freeswitch-runtime.sh`, which retrieves the
 authorized canonical Sofia configuration, replaces `sofia.conf.xml` atomically, reloads XML, and
 reconciles the managed external Sofia gateways before rescanning the profile. A control-plane trunk
-removal is a typed Agent teardown: it requests `sofia profile external unregister <gateway>`, waits
-until Sofia reports `UNREGED`, then authorizes the synchronizer to unload that exact gateway. A normal
-sync refuses to unload a removed gateway by itself, preventing a local `killgw` from racing the SIP
-unregistration sent to the carrier. Unchanged gateways are never de-registered by an unrelated
-synchronization. This reconciliation is required because a Sofia rescan
-alone does not replace an already loaded gateway; host, credential, and removal changes must remove
-the old in-memory gateway before the canonical configuration is materialized again. Only
-MNSCloud-managed gateway names (`trunk-<uuid>`) are reconciled. The script does not store tenant
-routing data locally and does not log the runtime token.
+removal is a typed Agent reconciliation. The API materialization includes a server-scoped
+`mnscloud-retirements` inventory. The module validates both Sofia and ACL documents before
+mutation, holds a host lock, and compares only managed gateways. Unchanged gateways remain
+loaded; changed and explicitly retired gateways are stopped before removal. FreeSWITCH 1.11.3
+transitions `UNREGISTER` to `DOWN`, not `UNREGED`. Local `DOWN` or absence is **not** proof that
+the carrier acknowledged removal: results explicitly retain `remoteRemoval=unconfirmed`.
+An absent retired gateway is an idempotent local success and is never recreated just to delete it.
+
+A private, non-secret phase journal under `/var/lib/mnscloud/freeswitch-reconcile` allows the next
+attempt to finish activation from a fresh API snapshot after interruption. XML credentials remain
+only in the root-controlled Sofia configuration. No credentials or credential digests are reported.
+The module verifies loaded/removed gateways after rescan and returns separate configuration and
+registration observations. It never restarts the whole Sofia profile for an ordinary trunk change.
+Run `bash tests/sync-runtime-gateways.sh` for crash, removal, preservation and authorization tests.
+Deploy the compatible API before this module, then the Agent with `voip.pabx.reconcile.v2`.
