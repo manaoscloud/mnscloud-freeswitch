@@ -530,10 +530,11 @@ install_pkgs() {
   case "$os" in
     debian)
       if [[ "$DRY_RUN" == true ]]; then
-        log DRY "load mnscloud-runtime-kit and run mrtk_ensure_freeswitch"
+        log DRY "load mnscloud-runtime-kit, install python3 and run mrtk_ensure_freeswitch"
         return 0
       fi
       load_runtime_kit
+      mrtk_install_packages python3
       MNSCLOUD_FREESWITCH_SIGNALWIRE_TOKEN="$TOKEN" \
       MNSCLOUD_FREESWITCH_REPO_SUITE="${FREESWITCH_REPO_SUITE:-}" \
         mrtk_ensure_freeswitch
