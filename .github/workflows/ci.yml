@@ -20,5 +20,5 @@ jobs:
         run: bash tests/install-log-capture.sh
       - name: apt/dpkg lock wait contract
         run: bash tests/apt-lock-wait.sh
-      - name: Sofia runtime gateway extraction contract
+      - name: Sofia gateway reconciliation and recovery contract
         run: bash tests/sync-runtime-gateways.sh

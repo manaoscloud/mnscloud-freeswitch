@@ -52,3 +52,14 @@ monorepo at runtime.
 - Do not add secrets, customer data, private infrastructure details, production domains/IPs, or hidden bypass logic.
 - MNSCloud may choose to pay, sponsor, contract, or hire contributors when work demonstrates strong value, but paid work requires explicit written agreement and is never implied by opening a Pull Request.
 - Keep security-sensitive decisions, tenant scope, billing, authorization, routing ownership, and secret resolution in the MNSCloud API/control plane.
+
+## Gateway reconciliation
+
+- Reconcile through `scripts/sync-freeswitch-runtime.sh`, which invokes the isolated Python helper.
+- Accept retirement identities only from authenticated API materialization. Never infer authorization
+  from a local gateway name, stale job payload, or a single-job environment whitelist.
+- Preserve unchanged gateways; journal interrupted changes and serialize local execution.
+- FreeSWITCH `REGED` is registration state, independent of OPTIONS reachability. `DOWN` and local
+  absence do not prove remote registrar removal; report remote removal as unconfirmed.
+- Validate multiple removals, unchanged registrations, failure replay and unauthorized removal with
+  `bash tests/sync-runtime-gateways.sh` before publishing.
