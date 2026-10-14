@@ -923,6 +923,9 @@ ${nodes}    </list>
 
 write_sofia_config() {
   local path="/etc/freeswitch/autoload_configs/sofia.conf.xml"
+  # Keep the previous canonical snapshot for reconciliation and change detection.
+  # Only bootstrap an absent configuration; sync owns subsequent replacements.
+  [[ -s "$path" ]] && return 0
   local dir
   dir="$(dirname "$path")"
   [[ -d "$dir" ]] || run "mkdir -p ${dir}"

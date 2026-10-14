@@ -59,6 +59,8 @@ monorepo at runtime.
 - Accept retirement identities only from authenticated API materialization. Never infer authorization
   from a local gateway name, stale job payload, or a single-job environment whitelist.
 - Preserve unchanged gateways; journal interrupted changes and serialize local execution.
+- The installer must preserve existing canonical Sofia XML. First-install profile includes are
+  valid previous state, but API snapshots must contain the external profile. Test both paths.
 - FreeSWITCH `REGED` is registration state, independent of OPTIONS reachability. `DOWN` and local
   absence do not prove remote registrar removal; report remote removal as unconfirmed.
 - Validate multiple removals, unchanged registrations, failure replay and unauthorized removal with
