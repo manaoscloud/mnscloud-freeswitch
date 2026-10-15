@@ -22,3 +22,5 @@ jobs:
         run: bash tests/apt-lock-wait.sh
       - name: Sofia gateway reconciliation and recovery contract
         run: bash tests/sync-runtime-gateways.sh
+      - name: Engine log settings contract
+        run: python3 tests/engine-logs.py && python3 tests/freeswitch-logs.py
