@@ -250,3 +250,22 @@ If these are provided, the installer writes `/etc/odbc.ini`:
   local `fs_cli` and adds the API/worker source IPs for remote control.
 - Keep SIP domains dynamic for multitenant PABX. Do not hard-code a single tenant domain in
   `sip_profiles/internal.xml`; use the domain/realm sent by the SIP client.
+
+## Engine log settings (server Logs tab)
+
+The PABX server **Logs** tab (enable, level `error|warning|notice|info|debug`, retention 1-90 days)
+is applied by `mnscloud-freeswitch-logs.timer`, installed by the installer and run every minute as
+root from `/usr/local/lib/mnscloud/engine-logs/freeswitch-logs.py` (shared core:
+`scripts/mnscloud_engine_logs.py`, identical in every engine repository).
+
+- Source: authenticated `POST /api/v1/pabx/runtime/log-config` with the node identity; HTTPS only, no
+  redirects. When the API is unreachable the last applied settings stay in force.
+- Disabled log = level `error` (errors and security events are always kept). Debug is a 4 hour
+  window decided by the API; it falls back to `notice`. Below 15% free disk debug/info are capped at
+  `notice`.
+- Live apply: `reload mod_logfile`, `fsctl loglevel`, `sofia loglevel all 0|9` and `sofia global siptrace on|off` (debug only). `logfile.conf.xml` is rendered by the script. Re-applied after an engine restart.
+- Retention: Native rotation (`rotate-on-hup` + `fsctl send_sighup`) of `/var/log/freeswitch/freeswitch.log`, gzip, deletion past the retention; `xml_curl/` debug files follow the same retention. `json_cdr/` is never touched (failed CDR posts are billing data). The shared installer log `/var/log/mnscloud-install.log` follows the same
+  retention.
+- Status: `journalctl -u mnscloud-freeswitch-logs` (one JSON line per run, never tokens).
+- Tests: `python3 tests/engine-logs.py && python3 tests/freeswitch-logs.py`.
+

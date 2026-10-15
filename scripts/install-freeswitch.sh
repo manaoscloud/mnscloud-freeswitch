@@ -6,6 +6,8 @@ LOG_PREFIX="[install-freeswitch]"
 source "$(dirname "$0")/lib/install-base.sh" "$@"
 # shellcheck disable=SC1091
 source "$(dirname "$0")/lib/env.sh"
+# shellcheck source=lib/engine-logs.sh
+source "$(dirname "$0")/lib/engine-logs.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -1419,6 +1421,7 @@ main() {
   fi
   wait_for_freeswitch_cli
   bash "${SCRIPT_DIR}/sync-freeswitch-runtime.sh"
+  install_engine_logs_timer freeswitch "${SCRIPT_DIR}"
   validate_media_codecs
   run_final_validation
   heartbeat || warn "Final heartbeat to ${API_BASE} failed; see the heartbeat lines above."
