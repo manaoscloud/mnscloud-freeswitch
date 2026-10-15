@@ -160,12 +160,12 @@ def journald_retention(days, path=Path('/etc/systemd/journald.conf.d/60-mnscloud
     path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
     temporary = path.with_name('.' + path.name + '.tmp')
     temporary.write_text(content)
-    os.chmod(temporary, 0o644)
+    os.chmod(temporary, 0o640)  # read by systemd-journald (root) only
     temporary.replace(path)
     return True
 
 
-def write_if_changed(path, content, mode=0o644, owner=None):
+def write_if_changed(path, content, mode=0o640, owner=None):
     path = Path(path)
     data = content.encode() if isinstance(content, str) else content
     if path.is_file() and path.read_bytes() == data:
