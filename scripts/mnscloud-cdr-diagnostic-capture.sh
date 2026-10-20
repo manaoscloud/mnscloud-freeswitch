@@ -68,16 +68,16 @@ prepare_response="$(curl -fsS -X POST "${api_base%/}/api/v1/voip/cdr-diagnostics
   -H "Authorization: Bearer $api_token" -H "Content-Type: application/json" --data "$prepare_payload")"
 upload_url="$(jq -r '.data.uploadUrl // empty' <<<"$prepare_response")"
 storage_key="$(jq -r '.data.key // empty' <<<"$prepare_response")"
-storage_account_uuid="$(jq -r '.data.storageAccountUUID // empty' <<<"$prepare_response")"
+storage_bucket_uuid="$(jq -r '.data.storageBucketUUID // empty' <<<"$prepare_response")"
 [[ -n "$upload_url" && -n "$storage_key" ]] || { echo "API did not return upload URL." >&2; exit 75; }
 
 curl -fsS -X PUT "$upload_url" -H "Content-Type: application/vnd.tcpdump.pcap" --data-binary "@$pcap" >/dev/null
 
 register_payload="$(jq -n \
   --arg module "$module" --arg engine "$engine" --arg resourceType "$resource_type" \
-  --arg resourceUUID "$resource_uuid" --arg callID "$call_id" --arg storageAccountUUID "$storage_account_uuid" \
+  --arg resourceUUID "$resource_uuid" --arg callID "$call_id" --arg storageBucketUUID "$storage_bucket_uuid" \
   --arg storageObjectKey "$storage_key" --arg checksumSha256 "$checksum" --argjson sizeBytes "$size_bytes" \
-  '{module:$module,engine:$engine,resourceType:$resourceType,resourceUUID:$resourceUUID,callID:$callID,diagnosticType:"pcapng",captureMode:"pcapng",storageMode:"storage",storageAccountUUID:$storageAccountUUID,storageObjectKey:$storageObjectKey,originalFilename:"cdr-diagnostic.pcapng",contentType:"application/vnd.tcpdump.pcap",sizeBytes:$sizeBytes,checksumSha256:$checksumSha256,sanitized:false,containsSdp:true,containsPayload:true,status:"available"}')"
+  '{module:$module,engine:$engine,resourceType:$resourceType,resourceUUID:$resourceUUID,callID:$callID,diagnosticType:"pcapng",captureMode:"pcapng",storageMode:"storage",storageBucketUUID:$storageBucketUUID,storageObjectKey:$storageObjectKey,originalFilename:"cdr-diagnostic.pcapng",contentType:"application/vnd.tcpdump.pcap",sizeBytes:$sizeBytes,checksumSha256:$checksumSha256,sanitized:false,containsSdp:true,containsPayload:true,status:"available"}')"
 
 curl -fsS -X POST "${api_base%/}/api/v1/voip/cdr-diagnostics" \
   -H "Authorization: Bearer $api_token" -H "Content-Type: application/json" --data "$register_payload"
