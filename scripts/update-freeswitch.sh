@@ -74,10 +74,21 @@ git rev-parse --verify --quiet "${REF}^{commit}" >/dev/null || {
   exit 1
 }
 
+# A rollback to a release predating the bridge must retire its generated service.
+reconcile_phone_agent_lifecycle() {
+  if [[ ! -f "${SCRIPT_DIR}/phone-agent-runtime.py" ]]; then
+    systemctl disable --now mnscloud-freeswitch-phone-agent.service 2>/dev/null || true
+    rm -f /etc/systemd/system/mnscloud-freeswitch-phone-agent.service
+    rm -f /usr/local/lib/mnscloud/freeswitch/phone-agent-runtime.py
+    systemctl daemon-reload
+  fi
+}
+
 restore_previous() {
   local result=0
   printf '[update-freeswitch] restoring previous runtime ref: %s\n' "$previous_ref" >&2
   git -c advice.detachedHead=false checkout --detach "$previous_ref" || result=1
+  reconcile_phone_agent_lifecycle || result=1
   if [[ "$result" == '0' ]]; then
     bash "${SCRIPT_DIR}/install-freeswitch.sh" || result=1
     bash "${SCRIPT_DIR}/validate-freeswitch.sh" || result=1
@@ -87,6 +98,7 @@ restore_previous() {
 
 printf '[update-freeswitch] applying FreeSWITCH runtime ref: %s\n' "$REF"
 git -c advice.detachedHead=false checkout --detach "$REF"
+reconcile_phone_agent_lifecycle
 if ! bash "${SCRIPT_DIR}/install-freeswitch.sh"; then
   restore_previous || true
   printf '[update-freeswitch] ERROR: update installation failed; previous runtime was restored.\n' >&2

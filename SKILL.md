@@ -65,3 +65,13 @@ monorepo at runtime.
   absence do not prove remote registrar removal; report remote removal as unconfirmed.
 - Validate multiple removals, unchanged registrations, failure replay and unauthorized removal with
   `bash tests/sync-runtime-gateways.sh` before publishing.
+
+## PhoneWeb contact-center agents
+
+The installer enables `mnscloud-freeswitch-phone-agent.service`. It consumes local ESL callcenter::info bridge-agent-start/bridge-agent-end events and reconciles only `agent-<UUID>` queue members from the authenticated control-plane `/pabx/runtime/agents` endpoint. Only AVAILABLE routes calls; PAUSED, ON_CALL and WRAP_UP do not. LOGGED_OUT removes memberships. The API owns session, tenant, queue and commercial authorization.
+
+The bridge reads existing host-local node credentials without logging them, rejects HTTP redirects, and persists pending events with mode 0600 under its systemd StateDirectory. Duplicate events are idempotent in the control plane. A control-plane outage pauses managed members until recovery; retired memberships discard refused replay events. Legacy extension members remain outside the bridge.
+
+Install/update/validate/rollback use the normal Agent module lifecycle. Validation requires the bridge service; rollback to a release predating it disables its service and removes the generated executable/unit. Tests: `python3 tests/phone-agent-runtime.py`. No direct host changes are required.
+
+The event reader runs independently from HTTP synchronization: a local contact event immediately pauses the member and fences stale AVAILABLE responses until the durable event is acknowledged. Service shutdown retires only its managed memberships; the spool survives for replay. Runtime validation requires both an active service and a successful control-plane synchronization within 60 seconds.

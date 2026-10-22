@@ -24,3 +24,5 @@ jobs:
         run: bash tests/sync-runtime-gateways.sh
       - name: Engine log settings contract
         run: python3 tests/engine-logs.py && python3 tests/freeswitch-logs.py
+      - name: Phone agent event bridge
+        run: python3 tests/phone-agent-runtime.py
