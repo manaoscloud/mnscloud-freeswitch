@@ -103,7 +103,7 @@ def desired(sock, rows, known):
         command(sock, f'api callcenter_config tier add {queue} {name} {int(row["penalty"])+1} 1')
         status = 'Available' if row['state'] == 'AVAILABLE' else 'On Break'
         command(sock, f'api callcenter_config agent set status {name} {status}')
-    for key, row in known.items():
+    for key, row in list(known.items()):
         if key not in current:
             command(sock, f'api callcenter_config agent set status {row["agentName"]} Logged Out')
             command(sock, f'api callcenter_config tier del {row["queueName"]} {row["agentName"]}')
@@ -202,7 +202,7 @@ def run():
                         LAST_SYNC_AT = time.time()
                         save_state(known, pending)
                     except (OSError, ValueError, KeyError):
-                        for row in known.values():
+                        for row in list(known.values()):
                             command(sock, f'api callcenter_config agent set status {row["agentName"]} On Break')
                     wakeup.wait(5)
                     wakeup.clear()
