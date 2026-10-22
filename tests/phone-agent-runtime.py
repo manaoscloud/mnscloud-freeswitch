@@ -50,3 +50,31 @@ b.desired(sock, [{**row, 'state': 'AVAILABLE'}], {})
 assert b'Paused: false' not in sock.data and b' Available' not in sock.data
 assert b'Paused: true' in sock.data or b'On Break' in sock.data
 b.BLOCKED.clear()
+
+# A contact arriving during the desired-state request fences its stale AVAILABLE result.
+with tempfile.TemporaryDirectory() as tmp:
+    b.STATE = Path(tmp) / 'state.json'
+    sock = Socket()
+    bridge = b.Bridge(sock)
+    bridge.observe = lambda rows: None
+    original_api = b.api
+    delivered = []
+    def fake_api(body=None):
+        if body is not None:
+            delivered.append(body)
+            return []
+        if not delivered:
+            bridge.record_event(payload)
+        return [{**row, 'state': 'AVAILABLE' if not delivered else 'ON_CALL'}]
+    b.api = fake_api
+    try:
+        bridge.sync_once()
+        assert bridge.pending == [payload]
+        assert b'Paused: false' not in sock.data and b' Available' not in sock.data
+        bridge.sync_once()
+        assert delivered == [payload] and not bridge.pending
+        assert b.load_state()[1] == []
+        assert agent not in b.BLOCKED
+    finally:
+        b.api = original_api
+print('Concurrent contact fencing and acknowledgement: OK')

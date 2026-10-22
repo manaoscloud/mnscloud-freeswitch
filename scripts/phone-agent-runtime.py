@@ -30,8 +30,10 @@ def save_state(known, pending):
     with STATE_LOCK:
         STATE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         temporary = STATE.with_suffix('.tmp')
-        temporary.write_text(json.dumps({'known': known, 'pending': pending, 'syncedAt': LAST_SYNC_AT}))
-        temporary.chmod(0o600)
+        # The path is fixed; engine/API data is serialized only as file contents.
+        with temporary.open('w', encoding='utf-8') as stream:
+            temporary.chmod(0o600)
+            json.dump({'known': known, 'pending': pending, 'syncedAt': LAST_SYNC_AT}, stream)
         temporary.replace(STATE)
 
 def load_state():
@@ -65,7 +67,8 @@ def api(body=None):
 
 
 def fields(raw):
-    return dict(line.split(': ', 1) for line in raw.replace('\r', '').split('\n') if ': ' in line)
+    pairs = (line.split(': ', 1) for line in raw.replace('\r', '').split('\n') if ': ' in line)
+    return {key: value for key, value in pairs}
 
 
 def event_payload(event):
@@ -91,7 +94,7 @@ def desired(sock, rows, known):
         if row.get('agentUUID') in BLOCKED:
             row = {**row, 'state': 'PAUSED'}
         name, queue, contact = row['agentName'], row['queueName'], row['contact']
-        if not contact or not all(SAFE.fullmatch(v) for v in (name, queue)) or not name.startswith('agent-') or re.search(r'[\s\r\n]', contact):
+        if not contact or not all(SAFE.fullmatch(v) for v in (name, queue)) or not name.startswith('agent-') or re.search(r'\s', contact):
             continue
         key = queue + '|' + name
         if row['state'] == 'LOGGED_OUT':
@@ -103,7 +106,7 @@ def desired(sock, rows, known):
         command(sock, f'api callcenter_config tier add {queue} {name} {int(row["penalty"])+1} 1')
         status = 'Available' if row['state'] == 'AVAILABLE' else 'On Break'
         command(sock, f'api callcenter_config agent set status {name} {status}')
-    for key, row in list(known.items()):
+    for key, row in known.items():
         if key not in current:
             command(sock, f'api callcenter_config agent set status {row["agentName"]} Logged Out')
             command(sock, f'api callcenter_config tier del {row["queueName"]} {row["agentName"]}')
@@ -152,6 +155,148 @@ def observe_queues(params, queues):
         return queue_counters(body, queues, int(time.time()))
 
 
+class Bridge:
+    def __init__(self, sock, params=None):
+        self.sock = sock
+        self.params = params
+        self.known, self.pending = load_state()
+        BLOCKED.clear()
+        BLOCKED.update(event['agentUUID'] for event in self.pending)
+        self.ready = False
+        self.ready_by = time.monotonic() + 15
+        self.stopped = threading.Event()
+        self.wakeup = threading.Event()
+        self.buffer = b''
+        self.metrics = {}
+        self.snapshot = {}
+
+    def active(self):
+        return not self.stopped.is_set() and not SHUTDOWN.is_set()
+
+    def replay(self):
+        while self.pending and self.active():
+            try:
+                api(self.pending[0])
+            except urllib.error.HTTPError as error:
+                # Deleted memberships and superseded stations cannot be replayed.
+                if error.code != 409:
+                    raise
+            with SOCKET_LOCK:
+                self.pending.pop(0)
+                save_state(self.known, self.pending)
+
+    def report_counters(self, counters):
+        for queue, values in counters.items():
+            if not self.active():
+                return
+            api({'kind': 'queue', 'queueUUID': queue.removeprefix('mnscloud-'), **values})
+
+    def sync_once(self):
+        global LAST_SYNC_AT
+        self.replay()
+        if not self.active():
+            return
+        rows = api()
+        with SOCKET_LOCK:
+            BLOCKED.intersection_update(event['agentUUID'] for event in self.pending)
+            self.known = desired(self.sock, rows, self.known)
+        self.observe(rows)
+        LAST_SYNC_AT = time.time()
+        with SOCKET_LOCK:
+            save_state(self.known, self.pending)
+
+    def synchronize(self):
+        try:
+            while self.active():
+                if not self.ready:
+                    self.wakeup.wait(0.2)
+                    continue
+                try:
+                    self.sync_once()
+                except (OSError, ValueError, KeyError):
+                    self.pause_all()
+                self.wakeup.wait(5)
+                self.wakeup.clear()
+        finally:
+            self.stopped.set()
+
+    def record_event(self, event):
+        if not event:
+            return
+        with SOCKET_LOCK:
+            BLOCKED.add(event['agentUUID'])
+            self.pause_agent(event['agentUUID'])
+            self.pending.append(event)
+            save_state(self.known, self.pending)
+            self.wakeup.set()
+            if len(self.pending) > 1000:
+                raise ValueError('Event backlog requires recovery')
+
+    def receive(self):
+        if not self.ready and time.monotonic() > self.ready_by:
+            raise ConnectionError('Event subscription unavailable')
+        data = self.sock.recv(65536)
+        if not data:
+            raise ConnectionError('Event socket closed')
+        self.buffer += data
+        if len(self.buffer) > 1048576:
+            raise ValueError('Event frame too large')
+        self.parse_frames()
+
+    def run(self):
+        worker = threading.Thread(target=self.synchronize, daemon=True)
+        worker.start()
+        try:
+            while self.active():
+                try:
+                    self.receive()
+                except socket.timeout:
+                    pass
+        finally:
+            self.stopped.set()
+            self.wakeup.set()
+            worker.join()
+            if SHUTDOWN.is_set():
+                self.known = desired(self.sock, [], self.known)
+                save_state(self.known, self.pending)
+
+    def pause_all(self):
+        with SOCKET_LOCK:
+            for row in self.known.values():
+                command(self.sock, f'api callcenter_config agent set status {row["agentName"]} On Break')
+
+    def pause_agent(self, agent):
+        command(self.sock, 'api callcenter_config agent set status agent-' + agent + ' On Break')
+
+    def observe(self, rows):
+        queues = {row['queueName'] for row in rows if SAFE.fullmatch(row['queueName'])}
+        try:
+            self.report_counters(observe_queues(self.params, queues))
+        except (OSError, ValueError, KeyError):
+            pass  # Counter expiry is visible; it never changes routing presence.
+
+    def handle_frame(self, meta, payload):
+        reply = meta.get('Reply-Text', '')
+        if reply.startswith('-ERR'):
+            raise ConnectionError('ESL authentication or subscription refused')
+        if reply.startswith('+OK accepted'):
+            self.ready = True
+        if meta.get('Content-Type') == 'text/event-json':
+            self.record_event(event_payload(json.loads(payload)))
+
+    def parse_frames(self):
+        while b'\n\n' in self.buffer:
+            header, rest = self.buffer.split(b'\n\n', 1)
+            meta = fields(header.decode())
+            length = int(meta.get('Content-Length', 0))
+            if length < 0 or length > 1048576:
+                raise ValueError('ESL frame too large')
+            if len(rest) < length:
+                return
+            payload, self.buffer = rest[:length], rest[length:]
+            self.handle_frame(meta, payload)
+
+
 def run():
     params = {node.attrib['name']: node.attrib['value'] for node in ET.parse('/etc/freeswitch/autoload_configs/event_socket.conf.xml').iter('param')}
     host = params.get('listen-ip', '127.0.0.1')
@@ -161,97 +306,7 @@ def run():
         sock.settimeout(1)
         command(sock, 'auth ' + params['password'])
         command(sock, 'event json CUSTOM callcenter::info')
-        buffer = b''
-        ready = False
-        ready_by = time.monotonic() + 15
-        known, pending = load_state()
-        BLOCKED.clear()
-        BLOCKED.update(event['agentUUID'] for event in pending)
-        stopped = threading.Event()
-        wakeup = threading.Event()
-        def synchronize():
-            global LAST_SYNC_AT
-            nonlocal known
-            try:
-                while not stopped.is_set() and not SHUTDOWN.is_set():
-                    if not ready:
-                        wakeup.wait(0.2)
-                        continue
-                    try:
-                        while pending and not stopped.is_set():
-                            try:
-                                api(pending[0])
-                            except urllib.error.HTTPError as error:
-                                # A deleted membership or superseded station cannot be replayed.
-                                if error.code != 409:
-                                    raise
-                            pending.pop(0)
-                            save_state(known, pending)
-                        if stopped.is_set(): return
-                        rows = api()
-                        with SOCKET_LOCK:
-                            BLOCKED.intersection_update(event['agentUUID'] for event in pending)
-                            known = desired(sock, rows, known)
-                        queues = {row['queueName'] for row in rows if SAFE.fullmatch(row['queueName'])}
-                        try:
-                            for queue, counters in observe_queues(params, queues).items():
-                                if stopped.is_set(): return
-                                api({'kind': 'queue', 'queueUUID': queue.removeprefix('mnscloud-'), **counters})
-                        except (OSError, ValueError, KeyError):
-                            pass  # Counter expiry is visible; it never changes routing presence.
-                        LAST_SYNC_AT = time.time()
-                        save_state(known, pending)
-                    except (OSError, ValueError, KeyError):
-                        for row in list(known.values()):
-                            command(sock, f'api callcenter_config agent set status {row["agentName"]} On Break')
-                    wakeup.wait(5)
-                    wakeup.clear()
-            finally:
-                stopped.set()
-        worker = threading.Thread(target=synchronize, daemon=True)
-        worker.start()
-        try:
-            while not stopped.is_set() and not SHUTDOWN.is_set():
-                if not ready and time.monotonic() > ready_by:
-                    raise ConnectionError('ESL subscription unavailable')
-                try:
-                    data = sock.recv(65536)
-                    if not data:
-                        raise ConnectionError('ESL closed')
-                    buffer += data
-                    if len(buffer) > 1048576:
-                        raise ValueError('ESL frame too large')
-                    while b'\n\n' in buffer:
-                        header, rest = buffer.split(b'\n\n', 1)
-                        meta = fields(header.decode())
-                        if meta.get('Reply-Text', '').startswith('-ERR'):
-                            raise ConnectionError('ESL authentication or subscription refused')
-                        if meta.get('Reply-Text', '').startswith('+OK accepted'):
-                            ready = True
-                        length = int(meta.get('Content-Length', 0))
-                        if len(rest) < length:
-                            break
-                        payload, buffer = rest[:length], rest[length:]
-                        if meta.get('Content-Type') == 'text/event-json':
-                            event = event_payload(json.loads(payload))
-                            if event:
-                                with SOCKET_LOCK:
-                                    BLOCKED.add(event['agentUUID'])
-                                    command(sock, 'api callcenter_config agent set status agent-' + event['agentUUID'] + ' On Break')
-                                    pending.append(event)
-                                    save_state(known, pending)
-                                    wakeup.set()
-                                    if len(pending) > 1000:
-                                        raise ValueError('Event backlog requires recovery')
-                except socket.timeout:
-                    pass
-        finally:
-            stopped.set()
-            wakeup.set()
-            worker.join()
-            if SHUTDOWN.is_set():
-                known = desired(sock, [], known)
-                save_state(known, pending)
+        Bridge(sock, params).run()
 
 
 if __name__ == '__main__':
