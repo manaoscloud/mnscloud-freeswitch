@@ -1340,6 +1340,35 @@ run_final_validation() {
   warn "Final FreeSWITCH validation failed; see the validate-freeswitch output above."
 }
 
+install_phone_agent_bridge() {
+  run "install -d -m 0755 /usr/local/lib/mnscloud/freeswitch"
+  run "install -m 0755 '${SCRIPT_DIR}/phone-agent-runtime.py' /usr/local/lib/mnscloud/freeswitch/phone-agent-runtime.py"
+  write_file "/etc/systemd/system/mnscloud-freeswitch-phone-agent.service" "[Unit]
+Description=MNSCloud freeswitch contact-center agent bridge
+After=network-online.target freeswitch.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/lib/mnscloud/freeswitch/phone-agent-runtime.py
+Restart=always
+RestartSec=5
+StateDirectory=mnscloud-freeswitch-phone-agent
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
+"
+  run "systemctl daemon-reload"
+  run "systemctl enable mnscloud-freeswitch-phone-agent.service"
+  run "systemctl restart mnscloud-freeswitch-phone-agent.service"
+}
+
 main() {
   require_root
   install_log_capture_start "install-freeswitch $(module_version_label) args: $(redacted_args "$@")"
@@ -1422,6 +1451,7 @@ main() {
   wait_for_freeswitch_cli
   bash "${SCRIPT_DIR}/sync-freeswitch-runtime.sh"
   install_engine_logs_timer freeswitch "${SCRIPT_DIR}"
+  install_phone_agent_bridge
   validate_media_codecs
   run_final_validation
   heartbeat || warn "Final heartbeat to ${API_BASE} failed; see the heartbeat lines above."

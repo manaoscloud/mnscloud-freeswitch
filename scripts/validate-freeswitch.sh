@@ -39,4 +39,13 @@ systemctl is-active --quiet freeswitch || fail 'freeswitch.service is not active
 external_profile_status="$("${FS_CLI}" -x 'sofia status profile external')" || fail 'the external Sofia profile is unavailable.'
 printf '%s\n' "$external_profile_status" | grep -qi 'external' || fail 'the external Sofia profile did not report a valid status.'
 
+systemctl is-active --quiet mnscloud-freeswitch-phone-agent.service || fail 'Phone agent bridge is not active.'
+
+bridge_ready=false
+for _ in {1..30}; do
+  if python3 -c 'import json,time; from pathlib import Path; p=Path("/var/lib/mnscloud-freeswitch-phone-agent/state.json"); raise SystemExit(0 if p.exists() and time.time()-json.loads(p.read_text()).get("syncedAt",0)<60 else 1)'; then bridge_ready=true; break; fi
+  sleep 2
+done
+[[ "$bridge_ready" == true ]] || fail 'Phone agent bridge has no recent control-plane sync.'
+
 printf '[validate-freeswitch] FreeSWITCH runtime validation OK\n'
