@@ -22,6 +22,8 @@ jobs:
     uses: manaoscloud/mnscloud-runtime-kit/.github/workflows/auto-release.yml@main
     with:
       release_script: scripts/release-freeswitch.sh
+      # main is protected (main-guard ruleset): only the release tag is pushed (runtime-kit tag_only).
+      tag_only: true
       version: ${{ github.event.inputs.version || '' }}
       setup_deno: true
       checkout_runtime_kit: true
